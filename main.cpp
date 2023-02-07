@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <chrono>
+#include <thread>
 
 using namespace std::chrono;
 void* sleep_thread(void * arg);
@@ -12,7 +13,7 @@ struct thread_args {
   int id;
   int seconds_to_sleep = 3;
   float sleep_ratio = 0.25;
-  int iterations = 10000;
+  int millisecond_duration = 10000;
   int * value;
 };
 
@@ -52,27 +53,23 @@ void* run_computation(void * arg)
     struct thread_args *args = (struct thread_args *)arg;
     printf("Starting computation on Thread:%d\n",args->id);
 
-    auto start = high_resolution_clock::now();
-    //loop and add value to sum_value
-    for(int i=0;i< args->iterations ;i++){
+    int addition_calculator = 0;
+
+    //calculating the end time with duration + current time
+    auto end = high_resolution_clock::now() + std::chrono::milliseconds(args -> millisecond_duration);
+
+    //checking that right now is before the end time
+    while(std::chrono::high_resolution_clock::now() < end){
       *args->value += 1;
+      addition_calculator += 1;
     }
 
-    auto stop = high_resolution_clock::now();
-    auto duration = duration_cast<nanoseconds>(stop - start);
-
-    long sleep_length = duration.count() * args->sleep_ratio;
-
-    
-    struct timespec req= {
-       (int)( sleep_length / 1000000000),  
-       ( sleep_length % 1000000000) 
-    };
+    long sleep_length = args -> millisecond_duration * args ->sleep_ratio;
 
     printf("Thread:%d",args->id);
-    printf(" Run Length:%lld ",duration.count());
-    printf(" Sleep_length:%ld \n",sleep_length);
-    nanosleep(&req,NULL);
+    printf(" Core Speed:%d \n", addition_calculator * 2 / args ->millisecond_duration );
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
 
     printf("Thread returns final computation:%d\n",*args->value);
     return NULL;
