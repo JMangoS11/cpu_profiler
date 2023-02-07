@@ -20,22 +20,28 @@ struct thread_args {
 int main() 
 {
 
-  int num_threads = 3;
-
+  int num_threads = 4;
+  cpu_set_t cpuset;
   //value to be added up by threads
   int sum_value = 0;
 
+  CPU_ZERO(&cpuset);
   pthread_t thread_array[num_threads];
 
   //create all the threads
   for (int i = 0; i < num_threads; i++) {
     struct thread_args *args = new struct thread_args;
 
+    //decide which cores to bind cpus too
+    CPU_SET(i % 2 * 2, &cpuset);
+
     //give an id and the reference to the sum_value to all threads
     args->id = i;
     args->value = &sum_value;
 
     pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
+    pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
+
   }
 
   //join the threads
@@ -58,15 +64,16 @@ void* run_computation(void * arg)
     //calculating the end time with duration + current time
     auto end = high_resolution_clock::now() + std::chrono::milliseconds(args -> millisecond_duration);
 
+
+    
     //checking that right now is before the end time
     while(std::chrono::high_resolution_clock::now() < end){
       *args->value += 1;
-      addition_calculator += 1;
+      addition_calculator += 1;S
     }
 
     long sleep_length = args -> millisecond_duration * args ->sleep_ratio;
-
-    printf("Thread:%d",args->id);
+    std::cout << "Thread " << args->id << " Current cpu: " << sched_getcpu() ;
     printf(" Core Speed:%d \n", addition_calculator * 2 / args ->millisecond_duration );
 
     std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
