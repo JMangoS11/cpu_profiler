@@ -4,7 +4,8 @@
 #include <unistd.h>
 #include <chrono>
 #include <thread>
-
+#include <fstream>
+#include <sstream>
 using namespace std::chrono;
 
 void* sleep_thread(void * arg);
@@ -18,7 +19,7 @@ int initialized = 0;
 
 struct thread_args {
   int id;
-  int test_duration = 500;
+  int test_duration = 950;
   int start_time = 0;
   int end_time = 0;
   float speed = 0;
@@ -32,7 +33,12 @@ int main()
 
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
-  
+  unsigned n;
+  if(std::ifstream("/proc/stat").ignore(3) >> n >> n >> n >> n >> n >> n >> n)
+    {
+        // use n here...
+        std::cout << n << '\n';
+    }
   pthread_t thread_array[num_threads];
   pthread_mutex_t mutex_array[num_threads];
   struct thread_args* args_array[num_threads];
@@ -82,6 +88,23 @@ int main()
   return 0;
 }
 
+int get_steal_time(int cpunum){
+  std::ifstream f("/proc/stat");
+  std::string s;
+  for (int i = 0; i <= cpunum; i++){
+        std::getline(f, s);
+  }
+  unsigned n;
+  std::string l;
+  if(std::istringstream(s)>> l >> n >> n >> n >> n >> n >> n >>n >>n )
+    {
+        // use n here...
+        return(n);
+    }
+
+    return 0;
+}
+
 
 void* run_computation(void * arg)
 {
@@ -100,7 +123,7 @@ void* run_computation(void * arg)
       //calculating the end time with duration + current time
       auto end = high_resolution_clock::now() + std::chrono::milliseconds(args -> test_duration);
 
-
+      int start_steal = get_steal_time(args->id);
       int ms = duration_cast< milliseconds >(system_clock::now().time_since_epoch()).count();
       args->start_time = ms;
       //checking that right now is before the end time
@@ -109,7 +132,8 @@ void* run_computation(void * arg)
       }
       ms = duration_cast< milliseconds >(system_clock::now().time_since_epoch()).count() ;
       args->end_time = ms;
-      args->speed = addition_calculator / args -> test_duration;
-    }
-    return NULL;
-}
+      
+      args->speed = get_steal_time(args->id) - start_steal;
+      }
+      return NULL;
+} 
