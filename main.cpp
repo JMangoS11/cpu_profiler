@@ -33,12 +33,7 @@ int main()
 
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
-  unsigned n;
-  if(std::ifstream("/proc/stat").ignore(3) >> n >> n >> n >> n >> n >> n >> n)
-    {
-        // use n here...
-        std::cout << n << '\n';
-    }
+
   pthread_t thread_array[num_threads];
   pthread_mutex_t mutex_array[num_threads];
   struct thread_args* args_array[num_threads];
