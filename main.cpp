@@ -236,7 +236,7 @@ int main()
   pthread_attr_init(&thAttr);
   pthread_attr_getschedpolicy(&thAttr, &policy);
   min_prio_for_policy = sched_get_priority_min(policy);
-  int d =pthread_setschedprio(thId, sched_get_priority_max(policy););
+  int d = pthread_setschedprio(thId, sched_get_priority_max(policy));
   if(d == 0){
       std::cout<<min_prio_for_policy<<std::endl;
     }else{
