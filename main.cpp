@@ -212,11 +212,11 @@ void print_steal_times_and_ema(const std::vector<double>& ema_array, const std::
 }
 
 int main(int argc, char *argv[]) {
-  //options
-  
+  //options 
   const std::vector<std::string_view> args(argv, argv + argc);
   const bool verbose = has_option(args, "-v");
-  const std::string_view date = get_option(args, "-d");
+  const std::string_view sleep_time = get_option(args, "-d");
+  printf("%d",int(sleep_time));
   //get local CPUSET
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
