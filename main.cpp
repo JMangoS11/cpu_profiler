@@ -212,12 +212,18 @@ void print_steal_times_and_ema(const std::vector<double>& ema_array, const std::
 }
 
 int main(int argc, char *argv[]) {
+  //default
+  int num_threads = 4;
+  int sleep_length = 10;
+  int profile_time = 1000;
+  int context_window = 5;
   //options 
   const std::vector<std::string_view> args(argv, argv + argc);
   const bool verbose = has_option(args, "-v");
-  const std::string_view sleep_time = get_option(args, "-d");
-  std::cout << std::string(sleep_time) << std::endl;
-  std::cout<< (std::stoi(std::string(sleep_time))+3) << std::endl;
+  const std::string_view str_sleep_time = get_option(args, "-d");
+  if(!(str_sleep_time)==""){
+    sleep_length = std::stoi(std::string(sleep_time));
+  }
   //get local CPUSET
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
