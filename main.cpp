@@ -219,10 +219,17 @@ int main(int argc, char *argv[]) {
   int context_window = 5;
   //options 
   const std::vector<std::string_view> args(argv, argv + argc);
+
   const bool verbose = has_option(args, "-v");
+
   const std::string_view str_sleep_time = get_option(args, "-d");
   if(!(str_sleep_time=="")){
     sleep_length = std::stoi(std::string(str_sleep_time));
+  }
+
+  const std::string_view str_prfl_time = get_option(args, "-p");
+  if(!(str_prfl_time=="")){
+    profile_time = std::stoi(std::string(str_prfl_time));
   }
   //get local CPUSET
   cpu_set_t cpuset;
