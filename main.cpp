@@ -217,7 +217,7 @@ int main(int argc, char *argv[]) {
   const bool verbose = has_option(args, "-v");
   const std::string_view sleep_time = get_option(args, "-d");
   std::cout << std::string(sleep_time) << std::endl;
-  std::cpit<< (std::stoi(std::string(sleep_time))+3) << std::endl;
+  std::cout<< (std::stoi(std::string(sleep_time))+3) << std::endl;
   //get local CPUSET
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
