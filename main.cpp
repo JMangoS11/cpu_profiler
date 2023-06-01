@@ -29,46 +29,64 @@ void* sleep_thread(void * arg);
 void* run_computation(void * arg);
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 
-//steal time history per thread
-
 
 //Arguments for each thread
 struct thread_args {
   int id;
-  int start_time = 0;
-  int end_time = 0;
   pthread_mutex_t mutex;
 };
 
+
+std::string_view get_option(
+    const std::vector<std::string_view>& args, 
+    const std::string_view& option_name) {
+    for (auto it = args.begin(), end = args.end(); it != end; ++it) {
+        if (*it == option_name)
+            if (it + 1 != end)
+                return *(it + 1);
+    }
+    
+    return "";
+};
+
+bool has_option(
+    const std::vector<std::string_view>& args, 
+    const std::string_view& option_name) {
+    for (auto it = args.begin(), end = args.end(); it != end; ++it) {
+        if (*it == option_name)
+            return true;
+    }
+    
+    return false;
+};
+
 //To get steal time of a CPU
-int get_steal_time(int cpunum){
+int get_steal_time(int cpunum) {
   std::ifstream f("/proc/stat");
   std::string s;
-  for (int i = 0; i <= cpunum + 1; i++){
+  for (int i = 0; i <= cpunum + 1; i++) {
         std::getline(f, s);
   }
   unsigned n;
   std::string l;
-  if(std::istringstream(s)>> l >> n >> n >> n >> n >> n >> n >>n >> n )
-    {
+  if(std::istringstream(s)>>l>> n >> n >> n >> n >> n >> n >> n >> n ) {
         return(n);
-    }
-
-    return 0;
+  }
+  return 0;
 }
 
 std::string get_cgroup_version() {
-    std::ifstream cgroup_controllers("/sys/fs/cgroup/cgroup.controllers");
-    if (cgroup_controllers.is_open()) {
-        return "cgroup2fs";
-    } else {
-        // Check if the cpu controller is available for cgroup v1
-        std::ifstream cpu_controller("/sys/fs/cgroup/cpu");
-        if (cpu_controller.is_open()) {
-            return "tmpfs";
-        }
+  std::ifstream cgroup_controllers("/sys/fs/cgroup/cgroup.controllers");
+  if (cgroup_controllers.is_open()) {  
+    return "cgroup2fs";
+  } else {
+    // Check if the cpu controller is available for cgroup v1
+    std::ifstream cpu_controller("/sys/fs/cgroup/cpu");
+    if (cpu_controller.is_open()) {
+      return "tmpfs";
     }
-    return "unknown";
+  }
+  return "unknown";
 }
 
 bool set_pthread_to_low_prio_cgroup(pthread_t thread) {
@@ -121,7 +139,6 @@ void get_steal_time_all(int cpunum,int steal_arr[]){
         std::string l;
         if(std::istringstream(s)>> l >> n >> n >> n >> n >> n >> n >>n >> n )
         {
-        // use n here...
         steal_arr[i] = n;
         }
   }
@@ -145,6 +162,7 @@ void get_run_time_all(int cpunum,int run_arr[]){
         }
   }
 }
+
 std::vector<double> calculate_stealtime_ema(const std::vector<std::vector<int>>& steal_history) {
     const int num_cores = steal_history.at(0).size();
 
@@ -217,9 +235,8 @@ int main()
   int max_prio_for_policy = 0;
   pthread_attr_init(&thAttr);
   pthread_attr_getschedpolicy(&thAttr, &policy);
-  max_prio_for_policy = sched_get_priority_max(policy);
   min_prio_for_policy = sched_get_priority_min(policy);
-  int d =pthread_setschedprio(thId, max_prio_for_policy);
+  int d =pthread_setschedprio(thId, sched_get_priority_max(policy););
   if(d == 0){
       std::cout<<min_prio_for_policy<<std::endl;
     }else{
@@ -251,35 +268,32 @@ int main()
 
 
   //start profiling+resting loop
-  while(true){
+  while(true) {
 
     //sleep for sleep_length
- 
     std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
 
-    //wake up and start profiling
-
-    
-    int starttime = duration_cast< milliseconds >(system_clock::now().time_since_epoch()).count() % 10000; 
+    //Set time where threads stop
     endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
-
+    
     //wake up threads and broadcast 
     initialized = 1;
     pthread_cond_broadcast(&cv);
     get_steal_time_all(num_threads,steal_time_begin);
     get_run_time_all(num_threads,run_time_begin);
+    
     //Wait for processors to finish profiling
     std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
 
     get_steal_time_all(num_threads,steal_time_end);
     get_run_time_all(num_threads,run_time_end);
-    auto end = duration_cast< milliseconds >(system_clock::now().time_since_epoch()).count() % 10000; 
+    
     std::vector<int> current_steals;
     for (int i = 0; i < num_threads; i++) {
       int stolentime = steal_time_end[i]-steal_time_begin[i];
       int rantime = run_time_end[i]-run_time_begin[i];
       current_steals.push_back(stolentime);
-  };
+    };
     
     steal_history.push_back(current_steals);
     std::vector<double> ema = calculate_stealtime_ema(steal_history);
@@ -296,52 +310,35 @@ int main()
 
 
 
-int get_profile_time(int cpunum){
+int get_profile_time(int cpunum) {
   std::ifstream f("/proc/stat");
   std::string s;
-  for (int i = 0; i <= cpunum; i++){
-        std::getline(f, s);
+  for (int i = 0; i <= cpunum; i++) {
+    std::getline(f, s);
   }
   unsigned n;
   std::string l;
-  if(std::istringstream(s)>> l >> n >> n >> n )
-    {
-        // use n here...
-        return(n);
-    }
-
-    return 0;
+  if(std::istringstream(s)>> l >> n >> n >> n ) {
+    return(n);
+  }
+  return 0;
 }
 
 void* run_computation(void * arg)
 {
-
     struct thread_args *args = (struct thread_args *)arg;
-    while(true){
+    while(true) {
       pthread_mutex_lock(&args->mutex);
       
       while (! initialized) {
       pthread_cond_wait(&cv, &args->mutex);
       }
       pthread_mutex_unlock(&args->mutex);
-      
+
       int addition_calculator = 0;
-
-
-      //int start_steal = get_steal_time(args->id);
-      //int start_computation = get_profile_time(args->id);
-
-      //int ms = duration_cast< milliseconds >(system_clock::now().time_since_epoch()).count();
-      args->start_time = duration_cast< milliseconds >(system_clock::now().time_since_epoch()).count() % 10000;
-      auto last_sleep_time = std::chrono::high_resolution_clock::now();
-      std::chrono::microseconds sleep_interval(40);
-      
-      while(std::chrono::high_resolution_clock::now() < endtime){
+      while(std::chrono::high_resolution_clock::now() < endtime) {
         addition_calculator += 1;
-
       };
-      args->end_time = duration_cast< milliseconds >(system_clock::now().time_since_epoch()).count() % 10000;
-     // ms = duration_cast< milliseconds >(system_clock::now().time_since_epoch()).count();
       initialized = 0;
       }
       return NULL;

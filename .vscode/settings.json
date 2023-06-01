@@ -56,6 +56,9 @@
         "map": "cpp",
         "regex": "cpp",
         "fstream": "cpp",
-        "sstream": "cpp"
-    }
+        "sstream": "cpp",
+        "xhash": "cpp",
+        "xutility": "cpp"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
 }
