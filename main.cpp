@@ -211,8 +211,12 @@ void print_steal_times_and_ema(const std::vector<double>& ema_array, const std::
     }
 }
 
-int main() 
-{
+int main(int argc, char *argv[]) {
+  //options
+  
+  const std::vector<std::string_view> args(argv, argv + argc);
+  const bool verbose = has_option(args, "-v");
+  const std::string_view date = get_option(args, "-d");
   //get local CPUSET
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
@@ -297,7 +301,9 @@ int main()
     
     steal_history.push_back(current_steals);
     std::vector<double> ema = calculate_stealtime_ema(steal_history);
-    print_steal_times_and_ema(ema, steal_history);
+    if(verbose) {
+      print_steal_times_and_ema(ema, steal_history);
+    }
   }
 
   //join the threads
