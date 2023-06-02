@@ -303,7 +303,7 @@ int main(int argc, char *argv[]) {
     args->mutex = mutex_array[i];
     //set prio of thread to MIN
     
-    pthread_create(&thread_array[i], NULL, r  un_computation, (void *) args);
+    pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
     pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
     int sch = pthread_setschedparam(thread_array[i], SCHED_IDLE,&params);
     args_array[i] = args;
