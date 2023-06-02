@@ -397,6 +397,7 @@ void* run_computation(void * arg)
       int addition_calculator = 0;
       while(std::chrono::high_resolution_clock::now() < endtime) {
         addition_calculator += 1;
+        std::cout<<"calc"<<std::endl;
       };
       initialized = 0;
       }
