@@ -316,12 +316,12 @@ int main(int argc, char *argv[]) {
     //Set time where threads stop
     endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
     
-    //wake up threads and broadcast 
-    initialized = 1;
-    pthread_cond_broadcast(&cv);
     get_steal_time_all(num_threads,data_begin);
     get_run_time_all(num_threads,data_begin);
     get_preempts_all(num_threads,data_begin);
+    //wake up threads and broadcast 
+    initialized = 1;
+    pthread_cond_broadcast(&cv);
     //Wait for processors to finish profiling
     std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
 
@@ -333,7 +333,7 @@ int main(int argc, char *argv[]) {
       int stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       int ran_pass = data_end[i].run_time - data_begin[i].run_time;
       int preempts = data_end[i].preempts - data_begin[i].preempts;
-      std::cout<<stolen_pass<<std::endl;
+      std::cout<<data_end[i].steal_time<<std::endl;
       std::cout<<ran_pass<<std::endl;
       std::cout<<preempts<<std::endl;
       result_data[i].steal_time.push_back(stolen_pass);
