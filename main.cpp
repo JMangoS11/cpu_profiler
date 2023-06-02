@@ -260,7 +260,7 @@ int main(int argc, char *argv[]) {
 
   raw_data data_begin[num_threads];
   raw_data data_end[num_threads];
-  profiled_data data_result[num_threads];
+  profiled_data result_data[num_threads];
 
   std::deque<std::vector<int>> steal_history;
   pthread_t thId = pthread_self();
