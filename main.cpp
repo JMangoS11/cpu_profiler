@@ -157,7 +157,7 @@ bool set_pthread_to_low_prio_cgroup(pthread_t thread) {
 
 
 //To get steal time of ALL CPUs
-void get_steal_time_all(int cpunum,std::array<raw_data>& steal_arr[]){
+void get_steal_time_all(int cpunum,std::array<raw_data>& steal_arr){
   std::ifstream f("/proc/stat");
   std::string s;
   int output[cpunum];
@@ -174,7 +174,7 @@ void get_steal_time_all(int cpunum,std::array<raw_data>& steal_arr[]){
 }
 
 //get preemptions of ALL cpus
-void get_preempts_all(int cpunum, std::array<raw_data>& preempt_arr[]) {
+void get_preempts_all(int cpunum, std::array<raw_data>& preempt_arr) {
     std::ifstream f("/proc/preempts");
     std::string s;
     int x;
@@ -189,7 +189,7 @@ void get_preempts_all(int cpunum, std::array<raw_data>& preempt_arr[]) {
 
 
 //get run time of ALL cpus
-void get_run_time_all(int cpunum,std::array<raw_data>& run_arr[]){
+void get_run_time_all(int cpunum,std::array<raw_data>& run_arr){
   std::ifstream f("/proc/stat");
   std::string s;
   int output[cpunum];
