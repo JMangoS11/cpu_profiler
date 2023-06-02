@@ -329,7 +329,7 @@ int main(int argc, char *argv[]) {
     get_steal_time_all(num_threads,data_end);
     get_run_time_all(num_threads,data_end);
     get_preempts_all(num_threads,data_end);
-    
+    std::cout<<"runtime end"<<data_end[0].run_time<<std::endl;
     for (int i = 0; i < num_threads; i++) {
       int stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       int ran_pass = data_end[i].run_time - data_begin[i].run_time;
