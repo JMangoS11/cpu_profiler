@@ -237,8 +237,8 @@ void printResult(int cpunum,profiled_data result[]){
 int main(int argc, char *argv[]) {
   //default
   int num_threads = 4;
-  int sleep_length = 10;
-  int profile_time = 1000;
+  int sleep_length = 1000;
+  int profile_time = 100;
   int context_window = 5;
   //options 
   const std::vector<std::string_view> args(argv, argv + argc);
@@ -397,7 +397,6 @@ void* run_computation(void * arg)
       int addition_calculator = 0;
       while(std::chrono::high_resolution_clock::now() < endtime) {
         addition_calculator += 1;
-        std::cout<<"calc"<<std::endl;
       };
       initialized = 0;
       }
