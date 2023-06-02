@@ -337,7 +337,11 @@ int main(int argc, char *argv[]) {
 
       result_data[i].steal_time.push_back(stolen_pass);
       result_data[i].preempts_curr = preempts;
-      result_data[i].capacity_curr = ran_pass/(stolen_pass + ran_pass);
+      if((stolen_pass + ran_pass)==0){
+        result_data[i].capacity_curr = 0;
+      }else{
+        result_data[i].capacity_curr = ran_pass/(stolen_pass + ran_pass);
+      }
       if(preempts == 0){
         result_data[i].latency = 0;
       } else {
