@@ -319,6 +319,7 @@ int main(int argc, char *argv[]) {
     get_steal_time_all(num_threads,data_begin);
     get_run_time_all(num_threads,data_begin);
     get_preempts_all(num_threads,data_begin);
+    std::cout<<"runtime begin"<<data_begin[0].run_time<<std::endl;
     //wake up threads and broadcast 
     initialized = 1;
     pthread_cond_broadcast(&cv);
