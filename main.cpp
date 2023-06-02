@@ -200,7 +200,6 @@ void get_run_time_all(int cpunum,raw_data run_arr[]){
         std::string l;
         if(std::istringstream(s)>> l >> n)
         {
-        // use n here...
           run_arr[i].run_time = n;
         }
   }
@@ -334,7 +333,9 @@ int main(int argc, char *argv[]) {
       int stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       int ran_pass = data_end[i].run_time - data_begin[i].run_time;
       int preempts = data_end[i].preempts - data_begin[i].preempts;
-
+      std::cout<<data_end[i].steal_time<<std::endl;
+      std::cout<<data_end[i].run_time<<std::endl;
+      std::cout<<data_end[i].preempts<<std::endl;
       result_data[i].steal_time.push_back(stolen_pass);
       result_data[i].preempts_curr = preempts;
       if((stolen_pass + ran_pass)==0){
