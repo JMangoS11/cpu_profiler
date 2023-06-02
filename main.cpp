@@ -228,7 +228,7 @@ double calculate_stealtime_ema(const std::deque<int>& steal_history) {
 void printResult(int cpunum,profiled_data result[]){
   for (int i = 0; i < cpunum; i++){
         std::cout << "CPU :"<<i<<" Capacity:"<<result[i].capacity_curr<<" Latency:"<<result[i].latency<<" stddev:"<<result[i].stddev;
-        std::cout <<"EMA: "<<result[i].ema<<"PREMPTS: "<<result[i].preempts_curr <<std::endl;
+        std::cout <<" EMA: "<<result[i].ema<<"PREMPTS: "<<result[i].preempts_curr <<std::endl;
   }
 }
 
@@ -339,8 +339,6 @@ int main(int argc, char *argv[]) {
       int stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       int ran_pass = data_end[i].run_time - data_begin[i].run_time;
       int preempts = data_end[i].preempts - data_begin[i].preempts;
-      std::cout<<data_end[i].run_time<<std::endl;
-      std::cout<<data_begin[i].run_time<<std::endl;
       result_data[i].steal_time.push_back(stolen_pass);
       result_data[i].preempts_curr = preempts;
       if((stolen_pass + ran_pass)==0){
@@ -356,8 +354,9 @@ int main(int argc, char *argv[]) {
       result_data[i].stddev = calculateStdDev(result_data[i].steal_time);
       result_data[i].ema = calculate_stealtime_ema(result_data[i].steal_time);
     };
+    if(verbose){
     printResult(num_threads,result_data);
-
+    }
     
   }
 
