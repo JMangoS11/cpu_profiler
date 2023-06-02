@@ -227,7 +227,8 @@ double calculate_stealtime_ema(const std::deque<int>& steal_history) {
 
 void printResult(int cpunum,profiled_data result[]){
   for (int i = 0; i < cpunum; i++){
-        std::cout << "CPU :"<<i<<" Capacity:"<<result[i].capacity_curr<<std::endl;
+        std::cout << "CPU :"<<i<<" Capacity:"<<result[i].capacity_curr<<" Latency:"<<result[i].latency<<" stddev:"<<result[i].stddev;
+        std::cout <<"EMA: "<<result[i].ema<<"PREMPTS: "<<result[i].preempts_curr <<std::endl;
   }
 }
 
