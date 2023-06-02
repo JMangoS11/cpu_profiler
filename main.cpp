@@ -335,7 +335,6 @@ int main(int argc, char *argv[]) {
       int preempts = data_end[i].preempts - data_begin[i].preempts;
       std::cout<<data_end[i].run_time<<std::endl;
       std::cout<<data_begin[i].run_time<<std::endl;
-      std::cout<<preempts<<std::endl;
       result_data[i].steal_time.push_back(stolen_pass);
       result_data[i].preempts_curr = preempts;
       if((stolen_pass + ran_pass)==0){
