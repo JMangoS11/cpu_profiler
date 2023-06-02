@@ -38,7 +38,22 @@ struct thread_args {
   pthread_mutex_t mutex;
 };
 
-double calculateStdDev(const std::vector<double>& v) {
+struct raw_data {
+  int steal_time;
+  int run_time;
+  int preempts;
+}
+
+struct profiled_data{
+  double stddev;
+  double ema;
+  std::deque<int> steal_time;
+  int preempts_curr;
+  double capacity_curr;
+  double latency;
+}
+
+double calculateStdDev(const std::deque<int>& v) {
     if (v.size() == 0) {
         return 0.0;
     }
@@ -142,11 +157,10 @@ bool set_pthread_to_low_prio_cgroup(pthread_t thread) {
 
 
 //To get steal time of ALL CPUs
-void get_steal_time_all(int cpunum,int steal_arr[]){
+void get_steal_time_all(int cpunum,raw_data steal_arr[]){
   std::ifstream f("/proc/stat");
   std::string s;
   int output[cpunum];
-  
   std::getline(f, s);
   for (int i = 0; i < cpunum; i++){
         std::getline(f, s);
@@ -154,13 +168,13 @@ void get_steal_time_all(int cpunum,int steal_arr[]){
         std::string l;
         if(std::istringstream(s)>> l >> n >> n >> n >> n >> n >> n >>n >> n )
         {
-        steal_arr[i] = n;
+          steal_arr[i].steal_time = n;
         }
   }
 }
 
 //get preemptions of ALL cpus
-void get_preempts_all(int cpunum, int preempt_arr[]) {
+void get_preempts_all(int cpunum, raw_data preempt_arr[]) {
     std::ifstream f("/proc/preempts");
     std::string s;
     int x;
@@ -169,17 +183,16 @@ void get_preempts_all(int cpunum, int preempt_arr[]) {
             std::cerr << "File reading error\n";
             return;
         }
-        preempt_arr[i] = x;
+        preempt_arr[i].preempts = x;
     }
 }
 
 
 //get run time of ALL cpus
-void get_run_time_all(int cpunum,int run_arr[]){
+void get_run_time_all(int cpunum,raw_data run_arr[]){
   std::ifstream f("/proc/stat");
   std::string s;
   int output[cpunum];
-  
   std::getline(f, s);
   for (int i = 0; i < cpunum; i++){
         std::getline(f, s);
@@ -188,35 +201,29 @@ void get_run_time_all(int cpunum,int run_arr[]){
         if(std::istringstream(s)>> l >> n)
         {
         // use n here...
-        run_arr[i] = n;
+          run_arr[i].run_time = n;
         }
   }
 }
 
-std::vector<double> calculate_stealtime_ema(const std::deque<std::vector<int>>& steal_history) {
-    const int num_cores = steal_history.at(0).size();
+double calculate_stealtime_ema(const std::deque<int>& steal_history) {
 
-    std::vector<double> ema(num_cores, 0.0);
 
     // Start from the most recent history entry and go back maximally 5 places.
     int max_lookback = std::min(static_cast<int>(steal_history.size()), 5);
-    for (int core = 0; core < num_cores; ++core) {
-        double ema_core = 0.0;
-        double weight = 1.0;
-        double weight_sum = 0.0;
 
-        for (int lookback = 0; lookback < max_lookback; ++lookback) {
-            int index = steal_history.size() - 1 - lookback;
-            ema_core += weight * steal_history[index][core];
-            weight_sum += weight;
-            weight /= 2.0;
-        }
+    double ema_core = 0.0;
+    double weight = 1.0;
+    double weight_sum = 0.0;
 
-        ema_core /= weight_sum;
-        ema[core] = ema_core;
+    for (int lookback = 0; lookback < max_lookback; ++lookback) {
+        int index = steal_history.size() - 1 - lookback;
+        ema_core += weight * steal_history[index];
+        weight_sum += weight;
+        weight /= 2.0;
     }
-
-    return ema;
+    ema_core /= weight_sum;
+    return ema_core;
 }
 
 
@@ -279,19 +286,17 @@ int main(int argc, char *argv[]) {
   pthread_t thread_array[num_threads];
   pthread_mutex_t mutex_array[num_threads];
   struct thread_args* args_array[num_threads];
-  int steal_time_end[num_threads];
-  int steal_time_begin[num_threads];
+
+  raw_data data_begin[num_threads];
+  raw_data data_end[num_threads];
+  profiled_data data_result[num_threads];
+
   std::deque<std::vector<int>> steal_history;
-  int run_time_end[num_threads];
-  int run_time_begin[num_threads];
-  int preempts_end[num_threads];
-  int preempts_begin[num_threads];
   pthread_t thId = pthread_self();
   pthread_attr_t thAttr;
   
   //Fetch highest and lowest possible prios(and set current thread to highest)
   int policy = 0;
-  int max_prio_for_policy = 0;
   pthread_attr_init(&thAttr);
   pthread_attr_getschedpolicy(&thAttr, &policy);
   min_prio_for_policy = sched_get_priority_min(policy);
@@ -338,31 +343,34 @@ int main(int argc, char *argv[]) {
     //wake up threads and broadcast 
     initialized = 1;
     pthread_cond_broadcast(&cv);
-    get_steal_time_all(num_threads,steal_time_begin);
-    get_run_time_all(num_threads,run_time_begin);
-    get_preempts_all(num_threads,preempts_begin);
+    get_steal_time_all(num_threads,data_begin);
+    get_run_time_all(num_threads,data_begin);
+    get_preempts_all(num_threads,data_begin);
     //Wait for processors to finish profiling
     std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
 
-    get_steal_time_all(num_threads,steal_time_end);
-    get_run_time_all(num_threads,run_time_end);
-    get_preempts_all(num_threads,preempts_end);
+    get_steal_time_all(num_threads,data_end);
+    get_run_time_all(num_threads,data_end);
+    get_preempts_all(num_threads,data_end);
     
-    std::vector<int> current_steals;
     for (int i = 0; i < num_threads; i++) {
-      int stolentime = steal_time_end[i]-steal_time_begin[i];
-      int rantime = run_time_end[i]-run_time_begin[i];
-      current_steals.push_back(stolentime);
-      preempts_end[i] = preempts_end[i] - preempts_begin[i];
+      int stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
+      int ran_pass = data_end[i].run_time - data_begin[i].run_time;
+      int preempts = data_end[i].preempts - data_begin[i].preempts;
+
+      result_data[i].steal_time.push_back(stolen_pass);
+      result_data[i].preempts_curr = preempts;
+      result_data[i].capacity_curr = ran_pass/(stolen_pass + ran_pass);
+      if(preempts == 0){
+        result_data[i].latency = 0;
+      } else {
+        result_data[i].latency = stolen_pass/preempts; 
+      }
+      result_data[i].stddev = calculateStdDev(result_data[i].steal_time);
+      result_data[i].ema = calculate_stealtime_ema(result_data[i].steal_time);
     };
-    if(steal_history.size()>4){
-      steal_history.pop_front();
-    }
-    steal_history.push_back(current_steals);
-    std::vector<double> ema = calculate_stealtime_ema(steal_history);
-    if(verbose) {
-      print_results(ema, steal_history, preempts_end);
-    }
+
+    
   }
 
   //join the threads
