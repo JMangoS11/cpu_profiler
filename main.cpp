@@ -42,7 +42,7 @@ struct raw_data {
   int steal_time;
   int run_time;
   int preempts;
-}
+};
 
 struct profiled_data{
   double stddev;
@@ -51,7 +51,7 @@ struct profiled_data{
   int preempts_curr;
   double capacity_curr;
   double latency;
-}
+};
 
 double calculateStdDev(const std::deque<int>& v) {
     if (v.size() == 0) {
@@ -227,36 +227,7 @@ double calculate_stealtime_ema(const std::deque<int>& steal_history) {
 }
 
 
-void print_results(const std::vector<double>& ema_array,const std::deque<std::vector<int>>& steal_history, int preempt_arr[],
-	std::vector<double>& stddev_array) {
-    for (int core = 0; core < steal_history[0].size(); ++core) {
-        std::vector<int> core_steal_history;
-        for (int i = 0; i < steal_history.size(); ++i) {
-            core_steal_history.push_back(steal_history[i][core]);
-        }
 
-        double ema = ema_array[core];
-	double std_dev = stdev_array[core];
-	double latency;
-	if(preempt_arr[core] == 0){
-	  latency = 0;
-	} else {
-	  latency = core_steal_history[core_steal_history.size()-1];
-	}
-
-        std::cout << "Core:" << core  << " StealTime: ";
-        for (int i = std::max(0, static_cast<int>(core_steal_history.size()) - 5); i < core_steal_history.size(); ++i) {
-            std::cout << core_steal_history[i];
-            if (i < core_steal_history.size() - 1) {
-                std::cout << ", ";
-            }
-        }
-        std::cout << " EMA: " << ema << " ";
-	std::cout<< "STD_DEV: "<< std_dev;
-        std::cout << "PREEMPTS_RAW: " << preempt_arr[core]<< " ";
-   	std::cout << "LATENCY" <<latency<<std::endl;
-	}
-}
 
 int main(int argc, char *argv[]) {
   //default
