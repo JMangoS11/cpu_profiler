@@ -346,6 +346,7 @@ int main(int argc, char *argv[]) {
       result_data[i].stddev = calculateStdDev(result_data[i].steal_time);
       result_data[i].ema = calculate_stealtime_ema(result_data[i].steal_time);
     };
+    printResult(num_threads,result_data);
 
     
   }
