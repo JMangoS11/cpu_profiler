@@ -157,7 +157,7 @@ bool set_pthread_to_low_prio_cgroup(pthread_t thread) {
 
 
 //To get steal time of ALL CPUs
-void get_steal_time_all(int cpunum,raw_data steal_arr[]){
+void get_steal_time_all(int cpunum,std::array<raw_data>& steal_arr[]){
   std::ifstream f("/proc/stat");
   std::string s;
   int output[cpunum];
@@ -174,7 +174,7 @@ void get_steal_time_all(int cpunum,raw_data steal_arr[]){
 }
 
 //get preemptions of ALL cpus
-void get_preempts_all(int cpunum, raw_data preempt_arr[]) {
+void get_preempts_all(int cpunum, std::array<raw_data>& preempt_arr[]) {
     std::ifstream f("/proc/preempts");
     std::string s;
     int x;
@@ -189,7 +189,7 @@ void get_preempts_all(int cpunum, raw_data preempt_arr[]) {
 
 
 //get run time of ALL cpus
-void get_run_time_all(int cpunum,raw_data run_arr[]){
+void get_run_time_all(int cpunum,std::array<raw_data>& run_arr[]){
   std::ifstream f("/proc/stat");
   std::string s;
   int output[cpunum];
@@ -263,9 +263,10 @@ int main(int argc, char *argv[]) {
   pthread_mutex_t mutex_array[num_threads];
   struct thread_args* args_array[num_threads];
 
-  raw_data data_begin[num_threads];
-  raw_data data_end[num_threads];
-  profiled_data result_data[num_threads];
+
+  std::array<raw_data, num_threads> data_begin;
+  std::array<raw_data, num_threads> data_end;
+  std::array<profiled_data, num_threads> result_data;
 
   std::deque<std::vector<int>> steal_history;
   pthread_t thId = pthread_self();
