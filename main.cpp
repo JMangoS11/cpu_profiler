@@ -14,6 +14,8 @@
 #include <cstdlib>
 #include <sys/vfs.h>
 #include <cmath>
+#include <deque>
+#include <numeric>
 using namespace std::chrono;
 
 //variables to set for testing
@@ -36,6 +38,19 @@ struct thread_args {
   pthread_mutex_t mutex;
 };
 
+double calculateStdDev(const std::vector<double>& v) {
+    if (v.size() == 0) {
+        return 0.0;
+    }
+
+    double sum = std::accumulate(v.begin(), v.end(), 0.0);
+    double mean = sum / v.size();
+
+    double sq_sum = std::inner_product(v.begin(), v.end(), v.begin(), 0.0);
+    double stdDev = std::sqrt(sq_sum / v.size() - mean * mean);
+
+    return stdDev;
+}
 
 std::string_view get_option(
     const std::vector<std::string_view>& args, 
@@ -144,6 +159,21 @@ void get_steal_time_all(int cpunum,int steal_arr[]){
   }
 }
 
+//get preemptions of ALL cpus
+void get_preempts_all(int cpunum, int preempt_arr[]) {
+    std::ifstream f("/proc/preempts");
+    std::string s;
+    int x;
+    for (int i = 0; i < cpunum; i++) {
+        if (!(f >> s >> x)) {
+            std::cerr << "File reading error\n";
+            return;
+        }
+        preempt_arr[i] = x;
+    }
+}
+
+
 //get run time of ALL cpus
 void get_run_time_all(int cpunum,int run_arr[]){
   std::ifstream f("/proc/stat");
@@ -163,14 +193,13 @@ void get_run_time_all(int cpunum,int run_arr[]){
   }
 }
 
-std::vector<double> calculate_stealtime_ema(const std::vector<std::vector<int>>& steal_history) {
+std::vector<double> calculate_stealtime_ema(const std::deque<std::vector<int>>& steal_history) {
     const int num_cores = steal_history.at(0).size();
 
     std::vector<double> ema(num_cores, 0.0);
 
     // Start from the most recent history entry and go back maximally 5 places.
     int max_lookback = std::min(static_cast<int>(steal_history.size()), 5);
-
     for (int core = 0; core < num_cores; ++core) {
         double ema_core = 0.0;
         double weight = 1.0;
@@ -191,7 +220,8 @@ std::vector<double> calculate_stealtime_ema(const std::vector<std::vector<int>>&
 }
 
 
-void print_steal_times_and_ema(const std::vector<double>& ema_array, const std::vector<std::vector<int>>& steal_history) {
+void print_results(const std::vector<double>& ema_array,const std::deque<std::vector<int>>& steal_history, int preempt_arr[],
+	std::vector<double>& stddev_array) {
     for (int core = 0; core < steal_history[0].size(); ++core) {
         std::vector<int> core_steal_history;
         for (int i = 0; i < steal_history.size(); ++i) {
@@ -199,16 +229,26 @@ void print_steal_times_and_ema(const std::vector<double>& ema_array, const std::
         }
 
         double ema = ema_array[core];
+	double std_dev = stdev_array[core];
+	double latency;
+	if(preempt_arr[core] == 0){
+	  latency = 0;
+	} else {
+	  latency = core_steal_history[core_steal_history.size()-1];
+	}
 
-        std::cout << "StealTime Core " << core + 1 << ": ";
+        std::cout << "Core:" << core  << " StealTime: ";
         for (int i = std::max(0, static_cast<int>(core_steal_history.size()) - 5); i < core_steal_history.size(); ++i) {
             std::cout << core_steal_history[i];
             if (i < core_steal_history.size() - 1) {
                 std::cout << ", ";
             }
         }
-        std::cout << " EMA: " << ema << std::endl;
-    }
+        std::cout << " EMA: " << ema << " ";
+	std::cout<< "STD_DEV: "<< std_dev;
+        std::cout << "PREEMPTS_RAW: " << preempt_arr[core]<< " ";
+   	std::cout << "LATENCY" <<latency<<std::endl;
+	}
 }
 
 int main(int argc, char *argv[]) {
@@ -241,10 +281,11 @@ int main(int argc, char *argv[]) {
   struct thread_args* args_array[num_threads];
   int steal_time_end[num_threads];
   int steal_time_begin[num_threads];
-  std::vector<std::vector<int>> steal_history;
+  std::deque<std::vector<int>> steal_history;
   int run_time_end[num_threads];
   int run_time_begin[num_threads];
-
+  int preempts_end[num_threads];
+  int preempts_begin[num_threads];
   pthread_t thId = pthread_self();
   pthread_attr_t thAttr;
   
@@ -299,24 +340,28 @@ int main(int argc, char *argv[]) {
     pthread_cond_broadcast(&cv);
     get_steal_time_all(num_threads,steal_time_begin);
     get_run_time_all(num_threads,run_time_begin);
-    
+    get_preempts_all(num_threads,preempts_begin);
     //Wait for processors to finish profiling
     std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
 
     get_steal_time_all(num_threads,steal_time_end);
     get_run_time_all(num_threads,run_time_end);
+    get_preempts_all(num_threads,preempts_end);
     
     std::vector<int> current_steals;
     for (int i = 0; i < num_threads; i++) {
       int stolentime = steal_time_end[i]-steal_time_begin[i];
       int rantime = run_time_end[i]-run_time_begin[i];
       current_steals.push_back(stolentime);
+      preempts_end[i] = preempts_end[i] - preempts_begin[i];
     };
-    
+    if(steal_history.size()>4){
+      steal_history.pop_front();
+    }
     steal_history.push_back(current_steals);
     std::vector<double> ema = calculate_stealtime_ema(steal_history);
     if(verbose) {
-      print_steal_times_and_ema(ema, steal_history);
+      print_results(ema, steal_history, preempts_end);
     }
   }
 
