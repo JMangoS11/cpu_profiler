@@ -20,7 +20,7 @@ using namespace std::chrono;
 
 //variables to set for testing
 int num_threads = 4;
-int sleep_length = 10;
+int sleep_length = 1000;
 int profile_time = 1000;
 int context_window = 5;
 //initialize global variables
@@ -38,12 +38,15 @@ struct thread_args {
   pthread_mutex_t mutex;
 };
 
+//TODO-REMOVE RUN_TIME change type to same as the type in linux(u64 prob)CHANGE TO TUPLE
 struct raw_data {
   int steal_time;
   int run_time;
   int preempts;
 };
 
+//TODO-remember capacity history instead of steal history and rename. Decay and
+//remember latency stddev also add percentage capacity(and actual capacity)
 struct profiled_data{
   double stddev;
   double ema;
@@ -119,6 +122,7 @@ std::string get_cgroup_version() {
   return "unknown";
 }
 
+//TODO-Finalize this
 bool set_pthread_to_low_prio_cgroup(pthread_t thread) {
     // Get the Linux thread ID.
     pid_t tid = syscall(SYS_gettid);
@@ -160,7 +164,6 @@ bool set_pthread_to_low_prio_cgroup(pthread_t thread) {
 void get_steal_time_all(int cpunum,std::vector<raw_data>& steal_arr){
   std::ifstream f("/proc/stat");
   std::string s;
-  int output[cpunum];
   std::getline(f, s);
   for (int i = 0; i < cpunum; i++){
         std::getline(f, s);
@@ -205,6 +208,7 @@ void get_run_time_all(int cpunum,std::vector<raw_data>& run_arr){
   }
 }
 
+//TODO-optimize(With discussed method)	y = pow(0.5, 1/(double)HALFLIFE); https://elixir.bootlin.com/linux/v6.1.31/source/Documentation/scheduler/sched-pelt.c
 double calculate_stealtime_ema(const std::deque<int>& steal_history) {
 
 
@@ -236,17 +240,20 @@ void printResult(int cpunum,profiled_data result[]){
 
 
 int main(int argc, char *argv[]) {
+  //TODO-Seperate Main method to multiple functions, prefetch-Num_threads
   //default
   int num_threads = 4;
+  //in milliseconds
   int sleep_length = 1000;
-  int profile_time = 100;
+  int profile_time = 1000;
+  //history(amount of runs saved)
   int context_window = 5;
   //options 
   const std::vector<std::string_view> args(argv, argv + argc);
-
   const bool verbose = has_option(args, "-v");
-
   const std::string_view str_sleep_time = get_option(args, "-d");
+  //TODO-show error codes for incorrectly formatted options
+  //TODO-Wrap in function(all options, add help/usage method)
   if(!(str_sleep_time=="")){
     sleep_length = std::stoi(std::string(str_sleep_time));
   }
@@ -264,55 +271,52 @@ int main(int argc, char *argv[]) {
   pthread_mutex_t mutex_array[num_threads];
   struct thread_args* args_array[num_threads];
 
-
   std::vector<raw_data> data_begin;
   std::vector<raw_data> data_end;
   data_begin.resize(num_threads);
   data_end.resize(num_threads);
+  //TODO-homogenize
   profiled_data result_data[num_threads];
 
   std::deque<std::vector<int>> steal_history;
   pthread_t thId = pthread_self();
   pthread_attr_t thAttr;
-  
+
   //Fetch highest and lowest possible prios(and set current thread to highest)
   int policy = 0;
   pthread_attr_init(&thAttr);
+  //TODO-check that policy is being fetched correctly, and if not fetch.(or set)
   pthread_attr_getschedpolicy(&thAttr, &policy);
   min_prio_for_policy = sched_get_priority_min(policy);
-  int d = pthread_setschedprio(thId, sched_get_priority_max(policy));
-  if(d == 0){
-      std::cout<<min_prio_for_policy<<std::endl;
-    }else{
-      printf("FAILED\n");
-    };
+  pthread_setschedprio(thId, sched_get_priority_max(policy));
   pthread_attr_destroy(&thAttr);
 
 
   //create all the threads and initilize mutex
   for (int i = 0; i < num_threads; i++) {
     struct thread_args *args = new struct thread_args;
+    
     struct sched_param params;
-
     params.sched_priority = 0;
     //init mutex
+    //TODO:use pthread_mutex_init
     mutex_array[i] =  PTHREAD_MUTEX_INITIALIZER;
     //decide which cores to bind cpus too
+    //TODO-check this, potentially need to reset i
     CPU_SET(i , &cpuset);
     //give an id and assign mutex to all threads
     args->id = i;
     args->mutex = mutex_array[i];
     //set prio of thread to MIN
-    
+    //TODO-error handling for thread creation mistakes
     pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
     pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
     int sch = pthread_setschedparam(thread_array[i], SCHED_IDLE,&params);
-    args_array[i] = args;
-  
   }
 
 
   //start profiling+resting loop
+  //TODO-Close or start on command;
   while(true) {
 
     //sleep for sleep_length
@@ -320,38 +324,43 @@ int main(int argc, char *argv[]) {
 
     //Set time where threads stop
     endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
-    
+
     get_steal_time_all(num_threads,data_begin);
-    get_run_time_all(num_threads,data_begin);
     get_preempts_all(num_threads,data_begin);
-    std::cout<<"runtime begin"<<data_begin[0].run_time<<std::endl;
+
     //wake up threads and broadcast 
     initialized = 1;
     pthread_cond_broadcast(&cv);
     //Wait for processors to finish profiling
+    //TODO-sleep every x ms and wake up to see if it's now(potentially) (do some testing)
+    //set prioclass to SchedRR or schedRT
     std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
 
     get_steal_time_all(num_threads,data_end);
-    get_run_time_all(num_threads,data_end);
     get_preempts_all(num_threads,data_end);
-    std::cout<<"runtime end"<<data_end[0].run_time<<std::endl;
+
     for (int i = 0; i < num_threads; i++) {
       int stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
-      int ran_pass = data_end[i].run_time - data_begin[i].run_time;
       int preempts = data_end[i].preempts - data_begin[i].preempts;
       result_data[i].steal_time.push_back(stolen_pass);
       result_data[i].preempts_curr = preempts;
-      if((stolen_pass + ran_pass)==0){
-        result_data[i].capacity_curr = 0;
-      }else{
-        result_data[i].capacity_curr = ran_pass/(stolen_pass + ran_pass);
-      }
+      //TODO-fix this lmao
+      result_data[i].capacity_curr = (profile_time-(stolen_pass*10))/(profile_time);
+      std::cout<<(profile_time-stolen_pass)<<std::endl;
+      std::cout<<profile_time<<std::endl;
+      //TODO-use fine grained steal time(custom)
       if(preempts == 0){
+        if(stolen_pass != 0{
+		std::cout<< "incompatible steal/preempt"<<std::endl;
+		return;
+	}
         result_data[i].latency = 0;
       } else {
+	//TODO-convert to MS per preempt
         result_data[i].latency = stolen_pass/preempts; 
       }
       result_data[i].stddev = calculateStdDev(result_data[i].steal_time);
+	//TODO-make sure is capacity/altered function
       result_data[i].ema = calculate_stealtime_ema(result_data[i].steal_time);
     };
     if(verbose){
@@ -386,12 +395,12 @@ int get_profile_time(int cpunum) {
 
 void* run_computation(void * arg)
 {
+    //TODO-Learn how to use kernel shark to visualize whole process
     struct thread_args *args = (struct thread_args *)arg;
     while(true) {
       pthread_mutex_lock(&args->mutex);
-      
       while (! initialized) {
-      pthread_cond_wait(&cv, &args->mutex);
+        pthread_cond_wait(&cv, &args->mutex);
       }
       pthread_mutex_unlock(&args->mutex);
 
