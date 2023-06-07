@@ -21,7 +21,7 @@ typedef uint64_t u64;
 
 
 //variables to set for testing
-int num_threads = std::thread::hardware_concurrency();;
+int num_threads = 2;
 int sleep_length = 1000;
 int profile_time = 1000;
 int context_window = 5;
@@ -257,10 +257,13 @@ void printResult(int cpunum,std::vector<profiled_data>& result){
 
 
 int main(int argc, char *argv[]) {
+  
   //TODO-Seperate Main method to multiple functions, prefetch-Num_threads
   const std::vector<std::string_view> args(argv, argv + argc);
   setArguments(args);
   //get local CPUSET
+  num_threads = sysconf( _SC_NPROCESSORS_ONLN );
+  std::cout<<num_threads<<std::endl;
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
 
