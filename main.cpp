@@ -25,6 +25,7 @@ int num_threads = 4;
 int sleep_length = 1000;
 int profile_time = 1000;
 int context_window = 5;
+bool verbose = false;
 //initialize global variables
 int initialized = 0;
 std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::_V2::system_clock::duration> endtime;
@@ -202,7 +203,6 @@ double calculate_stealtime_ema(const std::deque<double>& steal_history) {
 }
 
 
-//TODO-optimize(With discussed method)	y = pow(0.5, 1/(double)HALFLIFE); https://elixir.bootlin.com/linux/v6.1.31/source/Documentation/scheduler/sched-pelt.c
 double calculate_ema(double decay_factor, double& ema_help, double prev_ema,double new_value) {
   double newA = (1+decay_factor*ema_help);
   double result = (new_value + ((prev_ema)*ema_help*decay_factor))/newA;
@@ -220,6 +220,21 @@ void addToHistory(std::deque<double>& history_list,double item){
     history_list.pop_front();
   }
   history_list.push_back(item);
+}
+
+void setArguments(std::vector<std::string_view> arguments){
+  verbose = has_option(arguments, "-v");
+  const std::string_view str_sleep_time = get_option(arguments, "-d");
+  //TODO-show error codes for incorrectly formatted options
+  //TODO-Wrap in function(all options, add help/usage method)
+  if(!(str_sleep_time=="")){
+    sleep_length = std::stoi(std::string(str_sleep_time));
+  }
+
+  const std::string_view str_prfl_time = get_option(arguments, "-p");
+  if(!(str_prfl_time=="")){
+    profile_time = std::stoi(std::string(str_prfl_time));
+  }
 }
 
 
@@ -247,7 +262,6 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       addToHistory(result_arr[i].preempts_hist,result_arr[i].preempts);
 
       result_arr[i].capacity_perc_ema = calculate_ema(0.5,result_arr[i].capacity_perc_ema_a,result_arr[i].capacity_perc_ema,result_arr[i].capacity_perc);
-      std::cout<< "Ema with fancy method:" <<result_arr[i].capacity_perc_ema << "Ema without fancy method:"<< calculate_stealtime_ema(result_arr[i].capacity_perc_hist)<<std::endl;
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
     };
 }
@@ -268,32 +282,14 @@ void printResult(int cpunum,std::vector<profiled_data>& result){
 
 int main(int argc, char *argv[]) {
   //TODO-Seperate Main method to multiple functions, prefetch-Num_threads
-  //default
-  int num_threads = 4;
-  //in milliseconds
-  int sleep_length = 1000;
-  int profile_time = 1000;
-  //history(amount of runs saved)
-  int context_window = 5;
-  //options 
   const std::vector<std::string_view> args(argv, argv + argc);
-  const bool verbose = has_option(args, "-v");
-  const std::string_view str_sleep_time = get_option(args, "-d");
-  //TODO-show error codes for incorrectly formatted options
-  //TODO-Wrap in function(all options, add help/usage method)
-  if(!(str_sleep_time=="")){
-    sleep_length = std::stoi(std::string(str_sleep_time));
-  }
-
-  const std::string_view str_prfl_time = get_option(args, "-p");
-  if(!(str_prfl_time=="")){
-    profile_time = std::stoi(std::string(str_prfl_time));
-  }
+  setArguments(args);
   //get local CPUSET
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
 
   //intialize mutex, threads, and stealtime + runtime trackers
+  //TODO-homogenize
   pthread_t thread_array[num_threads];
   pthread_mutex_t mutex_array[num_threads];
   struct thread_args* args_array[num_threads];
@@ -304,9 +300,7 @@ int main(int argc, char *argv[]) {
   data_begin.resize(num_threads);
   data_end.resize(num_threads);
   result_arr.resize(num_threads);
-  //TODO-homogenize
 
-  std::deque<std::vector<int>> steal_history;
   pthread_t thId = pthread_self();
   pthread_attr_t thAttr;
 
@@ -340,6 +334,7 @@ int main(int argc, char *argv[]) {
     //TODO-error handling for thread creation mistakes
     pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
     pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
+    std::cout<<pthread_getaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset)<<std::endl;
     int sch = pthread_setschedparam(thread_array[i], SCHED_IDLE,&params);
   }
 
