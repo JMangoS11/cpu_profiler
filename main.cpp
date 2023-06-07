@@ -40,9 +40,8 @@ struct thread_args {
 
 //TODO-REMOVE RUN_TIME change type to same as the type in linux(u64 prob)CHANGE TO TUPLE
 struct raw_data {
-  int steal_time;
-  int run_time;
-  int preempts;
+  u64 steal_time;
+  u64 preempts;
 };
 
 //TODO-remember capacity history instead of steal history and rename. Decay and
@@ -190,6 +189,21 @@ void get_preempts_all(int cpunum, std::vector<raw_data>& preempt_arr) {
     }
 }
 
+void get_cpu_information(std::vector<raw_data>& data_arr){
+  std::ifstream f("/proc/preempts");
+  std::string s;
+  u64 preempts;
+  u64 steals;
+  for (int i = 0; i < cpunum; i++) {
+    if(!(f>>preempts>>steals)){
+      std::cerr <<"Error";
+    }
+    data_arr[i].preempts = preempts;
+    data_arr[i].steal_time = steals; 
+  }
+
+}
+
 
 //get run time of ALL cpus
 void get_run_time_all(int cpunum,std::vector<raw_data>& run_arr){
@@ -325,8 +339,7 @@ int main(int argc, char *argv[]) {
     //Set time where threads stop
     endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
 
-    get_steal_time_all(num_threads,data_begin);
-    get_preempts_all(num_threads,data_begin);
+    get_cpu_information(num_threads,data_begin);
 
     //wake up threads and broadcast 
     initialized = 1;
@@ -335,9 +348,7 @@ int main(int argc, char *argv[]) {
     //TODO-sleep every x ms and wake up to see if it's now(potentially) (do some testing)
     //set prioclass to SchedRR or schedRT
     std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
-
-    get_steal_time_all(num_threads,data_end);
-    get_preempts_all(num_threads,data_end);
+    get_cpu_information(num_threads,data_end);
 
     for (int i = 0; i < num_threads; i++) {
       int stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
