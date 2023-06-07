@@ -40,7 +40,6 @@ struct thread_args {
   pthread_mutex_t mutex;
 };
 
-//TODO-REMOVE RUN_TIME change type to same as the type in linux(u64 prob)CHANGE TO TUPLE
 struct raw_data {
   u64 steal_time;
   u64 preempts;
@@ -234,16 +233,22 @@ void ConvertNanosecondstoMilliseconds(u64* time) {
     *time = *time / 1000000ULL; // There are 1,000,000 nanoseconds in a millisecond
 }
 
+//helper function to set context window to be short
+void addToHistory(std::deque<double>& history_list,double item){
+  if(history_list.size() > context_window) {
+    history_list.pop_front();
+  }
+  history_list.push_back(item);
+}
+
+
 void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr){
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
       result_arr[i].preempts = preempts;
-
-      //TODO-fix this lmao
-      
-      //TODO-use fine grained steal time(custom)
+      addToHistory(result_arr[i].capacity_perc_hist,result_arr[i].capacity_perc);
       if(preempts == 0){
         if(stolen_pass != 0){
           std::cout<< "incompatible steal/preempt"<<std::endl;
@@ -251,7 +256,6 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
         }
         result_arr[i].latency = 0;
       } else {
-	//TODO-convert to MS per preempt
         result_arr[i].latency = stolen_pass/preempts; 
       }
       
@@ -263,8 +267,12 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
 
 void printResult(int cpunum,std::vector<profiled_data>& result){
   for (int i = 0; i < cpunum; i++){
+      for(int g=0;g<result[i].capacity_perc_hist.size();g++){
+        std::cout << result[i].capacity_perc_hist[g] << " ";
+      }
         std::cout << "CPU :"<<i<<" Capacity Perc:"<<result[i].capacity_perc<<" Latency:"<<result[i].latency<<" stddev:"<<result[i].capacity_perc_stddev;
         std::cout <<" EMA: "<<result[i].capacity_perc_ema<<"PREMPTS: "<<result[i].preempts <<std::endl;
+
   }
 }
 
