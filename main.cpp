@@ -237,11 +237,8 @@ void ConvertNanosecondstoMilliseconds(u64* time) {
 void getFinalizedData(int numthreads,int profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr){
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
-      ConvertNanosecondstoMilliseconds(&stolen_pass);
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
-
-      result_arr[i].capacity_perc = (profile_time-stolen_pass)/profile_time;
-
+      result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
       result_arr[i].preempts = preempts;
 
       //TODO-fix this lmao
