@@ -325,7 +325,8 @@ int main(int argc, char *argv[]) {
     mutex_array[i] =  PTHREAD_MUTEX_INITIALIZER;
     //decide which cores to bind cpus too
     //TODO-check this, potentially need to reset i
-    CPU_SET(i , &cpuset);
+    CPU_ZERO(&cpuset);
+    CPU_SET(i, &cpuset);
     //give an id and assign mutex to all threads
     args->id = i;
     args->mutex = mutex_array[i];
@@ -334,7 +335,6 @@ int main(int argc, char *argv[]) {
     //TODO-error handling for thread creation mistakes
     pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
     pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
-    std::cout<<pthread_getaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset)<<std::endl;
     int sch = pthread_setschedparam(thread_array[i], SCHED_IDLE,&params);
   }
 
