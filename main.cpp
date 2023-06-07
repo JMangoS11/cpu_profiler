@@ -234,7 +234,7 @@ void ConvertNanosecondstoMilliseconds(u64* time) {
     *time = *time / 1000000ULL; // There are 1,000,000 nanoseconds in a millisecond
 }
 
-void getFinalizedData(int numthreads,int profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr){
+void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr){
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
@@ -368,7 +368,7 @@ int main(int argc, char *argv[]) {
     //set prioclass to SchedRR or schedRT
     std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
     get_cpu_information(num_threads,data_end);
-    getFinalizedData(num_threads,profile_time,data_begin,data_end,result_arr);
+    getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
     if(verbose){
     printResult(num_threads,result_arr);
     }
