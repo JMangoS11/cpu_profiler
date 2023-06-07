@@ -38,11 +38,13 @@ pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 struct thread_args {
   int id;
   pthread_mutex_t mutex;
+  u64 *addition_calc;
 };
 
 struct raw_data {
   u64 steal_time;
   u64 preempts;
+  u64 raw_compute;
 };
 
 //TODO-remember capacity history instead of steal history and rename. Decay and
@@ -247,8 +249,10 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
+      result_arr[i].capacity_adj = data_end[i].raw_compute;
       result_arr[i].preempts = preempts;
-      addToHistory(result_arr[i].capacity_perc_hist,result_arr[i].capacity_perc);
+      
+
       if(preempts == 0){
         if(stolen_pass != 0){
           std::cout<< "incompatible steal/preempt"<<std::endl;
@@ -258,6 +262,11 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       } else {
         result_arr[i].latency = stolen_pass/preempts; 
       }
+
+
+
+      addToHistory(result_arr[i].capacity_perc_hist,result_arr[i].capacity_perc);
+      
       
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
 	//TODO-make sure is capacity/altered function
@@ -270,7 +279,7 @@ void printResult(int cpunum,std::vector<profiled_data>& result){
       for(int g=0;g<result[i].capacity_perc_hist.size();g++){
         std::cout << result[i].capacity_perc_hist[g] << " ";
       }
-        std::cout << "CPU :"<<i<<" Capacity Perc:"<<result[i].capacity_perc<<" Latency:"<<result[i].latency<<" stddev:"<<result[i].capacity_perc_stddev;
+        std::cout << "CPU :"<<i<< " Capacity Raw:"<<result[i].capacity_adj <<" Capacity Perc:"<<result[i].capacity_perc<<" Latency:"<<result[i].latency<<" stddev:"<<result[i].capacity_perc_stddev;
         std::cout <<" EMA: "<<result[i].capacity_perc_ema<<"PREMPTS: "<<result[i].preempts <<std::endl;
 
   }
@@ -348,6 +357,7 @@ int main(int argc, char *argv[]) {
     //give an id and assign mutex to all threads
     args->id = i;
     args->mutex = mutex_array[i];
+    args->addition_calc = &(data_end[i].raw_compute);
     //set prio of thread to MIN
     //TODO-error handling for thread creation mistakes
     pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
@@ -421,6 +431,7 @@ void* run_computation(void * arg)
       while(std::chrono::high_resolution_clock::now() < endtime) {
         addition_calculator += 1;
       };
+      *args->addition_calc = addition_calculator;
       initialized = 0;
       }
       return NULL;
