@@ -47,8 +47,6 @@ struct raw_data {
   u64 raw_compute;
 };
 
-//TODO-remember capacity history instead of steal history and rename. Decay and
-//remember latency stddev also add percentage capacity(and actual capacity)
 struct profiled_data{
   double capacity_perc_stddev;
   double capacity_adj_stddev;
@@ -59,6 +57,11 @@ struct profiled_data{
   double capacity_adj_ema;
   double latency_ema;
   double preempts_ema;
+
+  double capacity_perc_ema_a;
+  double capacity_adj_ema_a;
+  double latency_ema_a;
+  double preempts_ema_a;
 
   std::deque<double> capacity_perc_hist;
   std::deque<double> capacity_adj_hist;
@@ -163,36 +166,6 @@ bool set_pthread_to_low_prio_cgroup(pthread_t thread) {
 }
 
 
-//To get steal time of ALL CPUs
-void get_steal_time_all(int cpunum,std::vector<raw_data>& steal_arr){
-  std::ifstream f("/proc/stat");
-  std::string s;
-  std::getline(f, s);
-  for (int i = 0; i < cpunum; i++){
-        std::getline(f, s);
-        unsigned n;
-        std::string l;
-        if(std::istringstream(s)>> l >> n >> n >> n >> n >> n >> n >>n >> n )
-        {
-          steal_arr[i].steal_time = n;
-        }
-  }
-}
-
-//get preemptions of ALL cpus
-void get_preempts_all(int cpunum, std::vector<raw_data>& preempt_arr) {
-    std::ifstream f("/proc/preempts");
-    std::string s;
-    int x;
-    for (int i = 0; i < cpunum; i++) {
-        if (!(f >> s >> x)) {
-            std::cerr << "File reading error\n";
-            return;
-        }
-        preempt_arr[i].preempts = x;
-    }
-}
-
 void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr){
   std::ifstream f("/proc/preempts");
   std::string s;
@@ -211,24 +184,11 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr){
 
 
 //TODO-optimize(With discussed method)	y = pow(0.5, 1/(double)HALFLIFE); https://elixir.bootlin.com/linux/v6.1.31/source/Documentation/scheduler/sched-pelt.c
-double calculate_stealtime_ema(const std::deque<double>& steal_history) {
-
-
-    // Start from the most recent history entry and go back maximally 5 places.
-    int max_lookback = std::min(static_cast<int>(steal_history.size()), 5);
-
-    double ema_core = 0.0;
-    double weight = 1.0;
-    double weight_sum = 0.0;
-
-    for (int lookback = 0; lookback < max_lookback; ++lookback) {
-        int index = steal_history.size() - 1 - lookback;
-        ema_core += weight * steal_history[index];
-        weight_sum += weight;
-        weight /= 2.0;
-    }
-    ema_core /= weight_sum;
-    return ema_core;
+double calculate_ema(double decay_factor, double& ema_help, double prev_ema,double new_value) {
+  double newA = (1+decay_factor*ema_help);
+  double result = (new_value + ((prev_ema)*ema_help*decay_factor))/newA;
+  ema_help = newA;
+  return result;
 }
 
 void ConvertNanosecondstoMilliseconds(u64* time) {
@@ -249,9 +209,8 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
-      result_arr[i].capacity_adj = data_end[i].raw_compute;
+      result_arr[i].capacity_adj = (1/result_arr[i].capacity_perc) * data_end[i].raw_compute;
       result_arr[i].preempts = preempts;
-      
 
       if(preempts == 0){
         if(stolen_pass != 0){
@@ -263,14 +222,15 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
         result_arr[i].latency = stolen_pass/preempts; 
       }
 
-
-
       addToHistory(result_arr[i].capacity_perc_hist,result_arr[i].capacity_perc);
-      
-      
+      addToHistory(result_arr[i].capacity_adj_hist,result_arr[i].capacity_adj);
+      addToHistory(result_arr[i].latency_hist,result_arr[i].latency);
+      addToHistory(result_arr[i].preempts_hist,result_arr[i].preempts);
+
+      result_arr[i].capacity_perc_ema = calculate_ema(0.5,result_arr[i].capacity_perc_ema_a,result_arr[i].capacity_perc_ema,result_arr[i].capacity_perc);
+
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
-	//TODO-make sure is capacity/altered function
-      result_arr[i].capacity_perc_ema = calculate_stealtime_ema(result_arr[i].capacity_perc_hist);
+
     };
 }
 
