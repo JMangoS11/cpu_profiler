@@ -143,6 +143,19 @@ void moveCurrentThreadtoLowPrio() {
     ofs.close();
 }
 
+void moveCurrentThreadtoHighPrio() {
+    pid_t tid;
+    tid = syscall(SYS_gettid);
+    std::string path = "/sys/fs/cgroup/hi_prgroup/cgroup.procs";
+    std::ofstream ofs(path, std::ios_base::app);
+    if (!ofs) {
+        std::cerr << "Could not open the file\n";
+        return;
+    }
+    ofs << tid << "\n";
+    ofs.close();
+}
+
 
 void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr){
   std::ifstream f("/proc/preempts");
@@ -244,9 +257,6 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
 
 void printResult(int cpunum,std::vector<profiled_data>& result){
   for (int i = 0; i < cpunum; i++){
-      for(int g=0;g<result[i].capacity_perc_hist.size();g++){
-        std::cout << result[i].capacity_perc_hist[g] << " ";
-      }
         std::cout << "CPU :"<<i<< " Capacity Raw:"<<result[i].capacity_adj <<" Capacity Perc:"<<result[i].capacity_perc<<" Latency:"<<result[i].latency<<" stddev:"<<result[i].capacity_perc_stddev;
         std::cout <<" EMA: "<<result[i].capacity_perc_ema<<"PREMPTS: "<<result[i].preempts <<std::endl;
 
@@ -263,10 +273,9 @@ int main(int argc, char *argv[]) {
   setArguments(args);
   //get local CPUSET
   num_threads = sysconf( _SC_NPROCESSORS_ONLN );
-  std::cout<<num_threads<<std::endl;
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
-
+  moveCurrentThreadtoHighPrio();
   //intialize mutex, threads, and stealtime + runtime trackers
   //TODO-homogenize
   pthread_t thread_array[num_threads];
