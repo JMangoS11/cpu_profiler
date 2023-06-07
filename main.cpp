@@ -49,13 +49,28 @@ struct raw_data {
 //TODO-remember capacity history instead of steal history and rename. Decay and
 //remember latency stddev also add percentage capacity(and actual capacity)
 struct profiled_data{
-  double stddev;
-  double ema;
-  std::deque<double> steal_time;
-  double preempts_curr;
-  double capacity_curr;
+  double capacity_perc_stddev;
+  double capacity_adj_stddev;
+  double latency_stddev;
+  double preempts_stddev;
+
+  double capacity_perc_ema;
+  double capacity_adj_ema;
+  double latency_ema;
+  double preempts_ema;
+
+  std::deque<double> capacity_perc_hist;
+  std::deque<double> capacity_adj_hist;
+  std::deque<double> latency_hist;
+  std::deque<double> preempts_hist;
+
+  double preempts;
+  double capacity_perc;
+  double capacity_adj;
   double latency;
 };
+
+
 
 double calculateStdDev(const std::deque<double>& v) {
     if (v.size() == 0) {
@@ -94,20 +109,6 @@ bool has_option(
     return false;
 };
 
-//To get steal time of a CPU
-int get_steal_time(int cpunum) {
-  std::ifstream f("/proc/stat");
-  std::string s;
-  for (int i = 0; i <= cpunum + 1; i++) {
-        std::getline(f, s);
-  }
-  unsigned n;
-  std::string l;
-  if(std::istringstream(s)>>l>> n >> n >> n >> n >> n >> n >> n >> n ) {
-        return(n);
-  }
-  return 0;
-}
 
 std::string get_cgroup_version() {
   std::ifstream cgroup_controllers("/sys/fs/cgroup/cgroup.controllers");
@@ -229,10 +230,44 @@ double calculate_stealtime_ema(const std::deque<double>& steal_history) {
     return ema_core;
 }
 
-void printResult(int cpunum,profiled_data result[]){
+void ConvertNanosecondstoMilliseconds(u64* time) {
+    *time = *time / 1000000ULL; // There are 1,000,000 nanoseconds in a millisecond
+}
+
+void getFinalizedData(int numthreads,int profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr){
+  for (int i = 0; i < numthreads; i++) {
+      u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
+      ConvertNanosecondstoMilliseconds(&stolen_pass);
+      u64 preempts = data_end[i].preempts - data_begin[i].preempts;
+
+      result_arr[i].capacity_perc = (profile_time-stolen_pass)/profile_time;
+
+      result_arr[i].preempts = preempts;
+
+      //TODO-fix this lmao
+      
+      //TODO-use fine grained steal time(custom)
+      if(preempts == 0){
+        if(stolen_pass != 0){
+          std::cout<< "incompatible steal/preempt"<<std::endl;
+          return;
+        }
+        result_arr[i].latency = 0;
+      } else {
+	//TODO-convert to MS per preempt
+        result_arr[i].latency = stolen_pass/preempts; 
+      }
+      
+      result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
+	//TODO-make sure is capacity/altered function
+      result_arr[i].capacity_perc_ema = calculate_stealtime_ema(result_arr[i].capacity_perc_hist);
+    };
+}
+
+void printResult(int cpunum,std::vector<profiled_data>& result){
   for (int i = 0; i < cpunum; i++){
-        std::cout << "CPU :"<<i<<" Capacity:"<<result[i].capacity_curr<<" Latency:"<<result[i].latency<<" stddev:"<<result[i].stddev;
-        std::cout <<" EMA: "<<result[i].ema<<"PREMPTS: "<<result[i].preempts_curr <<std::endl;
+        std::cout << "CPU :"<<i<<" Capacity Perc:"<<result[i].capacity_perc<<" Latency:"<<result[i].latency<<" stddev:"<<result[i].capacity_perc_stddev;
+        std::cout <<" EMA: "<<result[i].capacity_perc_ema<<"PREMPTS: "<<result[i].preempts <<std::endl;
   }
 }
 
@@ -273,10 +308,10 @@ int main(int argc, char *argv[]) {
 
   std::vector<raw_data> data_begin;
   std::vector<raw_data> data_end;
+  std::vector<profiled_data> result_arr;
   data_begin.resize(num_threads);
   data_end.resize(num_threads);
   //TODO-homogenize
-  profiled_data result_data[num_threads];
 
   std::deque<std::vector<int>> steal_history;
   pthread_t thId = pthread_self();
@@ -335,35 +370,10 @@ int main(int argc, char *argv[]) {
     //set prioclass to SchedRR or schedRT
     std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
     get_cpu_information(num_threads,data_end);
-
-    for (int i = 0; i < num_threads; i++) {
-      int stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
-      int preempts = data_end[i].preempts - data_begin[i].preempts;
-      result_data[i].steal_time.push_back(stolen_pass);
-      result_data[i].preempts_curr = preempts;
-      //TODO-fix this lmao
-      result_data[i].capacity_curr = (profile_time-(stolen_pass*10))/(profile_time);
-      std::cout<<(profile_time-stolen_pass)<<std::endl;
-      std::cout<<profile_time<<std::endl;
-      //TODO-use fine grained steal time(custom)
-      if(preempts == 0){
-        if(stolen_pass != 0){
-		  std::cout<< "incompatible steal/preempt"<<std::endl;
-	  	return 1;
-	    }
-        result_data[i].latency = 0;
-      } else {
-	//TODO-convert to MS per preempt
-        result_data[i].latency = stolen_pass/preempts; 
-      }
-      result_data[i].stddev = calculateStdDev(result_data[i].steal_time);
-	//TODO-make sure is capacity/altered function
-      result_data[i].ema = calculate_stealtime_ema(result_data[i].steal_time);
-    };
+    getFinalizedData(num_threads,profile_time,data_begin,data_end,result_arr);
     if(verbose){
-    printResult(num_threads,result_data);
+    printResult(num_threads,result_arr);
     }
-    
   }
 
   //join the threads
