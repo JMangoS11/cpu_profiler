@@ -181,6 +181,25 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr){
 
 }
 
+double calculate_stealtime_ema(const std::deque<double>& steal_history) {
+
+
+    // Start from the most recent history entry and go back maximally 5 places.
+    int max_lookback = std::min(static_cast<int>(steal_history.size()), 5);
+
+    double ema_core = 0.0;
+    double weight = 1.0;
+    double weight_sum = 0.0;
+
+    for (int lookback = 0; lookback < max_lookback; ++lookback) {
+        int index = steal_history.size() - 1 - lookback;
+        ema_core += weight * steal_history[index];
+        weight_sum += weight;
+        weight /= 2.0;
+    }
+    ema_core /= weight_sum;
+    return ema_core;
+}
 
 
 //TODO-optimize(With discussed method)	y = pow(0.5, 1/(double)HALFLIFE); https://elixir.bootlin.com/linux/v6.1.31/source/Documentation/scheduler/sched-pelt.c
@@ -228,9 +247,8 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       addToHistory(result_arr[i].preempts_hist,result_arr[i].preempts);
 
       result_arr[i].capacity_perc_ema = calculate_ema(0.5,result_arr[i].capacity_perc_ema_a,result_arr[i].capacity_perc_ema,result_arr[i].capacity_perc);
-
+      std::cout<< "Ema with fancy method:" <<result_arr[i].capacity_perc_ema << "Ema without fancy method:"<< calculate_stealtime_ema(result_arr[i].capacity_perc_hist)<<std::endl;
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
-
     };
 }
 
