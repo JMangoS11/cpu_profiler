@@ -141,11 +141,15 @@ void moveCurrentThreadtoLowPrio() {
     }
     ofs << tid << "\n";
     ofs.close();
+    struct sched_param params;
+    params.sched_priority = sched_get_priority_min(SCHED_IDLE);
+    sched_setscheduler(tid,SCHED_IDLE,&params);
 }
 
 void moveCurrentThreadtoHighPrio() {
     pid_t tid;
     tid = syscall(SYS_gettid);
+    
     std::string path = "/sys/fs/cgroup/hi_prgroup/cgroup.procs";
     std::ofstream ofs(path, std::ios_base::app);
     if (!ofs) {
@@ -154,6 +158,9 @@ void moveCurrentThreadtoHighPrio() {
     }
     ofs << tid << "\n";
     ofs.close();
+    struct sched_param params;
+    params.sched_priority = sched_get_priority_max(SCHED_RR);
+    sched_setscheduler(tid,SCHED_RR,&params);
 }
 
 
@@ -251,6 +258,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       addToHistory(result_arr[i].preempts_hist,result_arr[i].preempts);
 
       result_arr[i].capacity_perc_ema = calculate_ema(0.5,result_arr[i].capacity_perc_ema_a,result_arr[i].capacity_perc_ema,result_arr[i].capacity_perc);
+      
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
     };
 }
@@ -289,25 +297,9 @@ int main(int argc, char *argv[]) {
   data_end.resize(num_threads);
   result_arr.resize(num_threads);
 
-  pthread_t thId = pthread_self();
-  pthread_attr_t thAttr;
-
-  //Fetch highest and lowest possible prios(and set current thread to highest)
-  int policy = 0;
-  pthread_attr_init(&thAttr);
-  //TODO-check that policy is being fetched correctly, and if not fetch.(or set)
-  pthread_attr_getschedpolicy(&thAttr, &policy);
-  min_prio_for_policy = sched_get_priority_min(policy);
-  pthread_setschedprio(thId, sched_get_priority_max(policy));
-  pthread_attr_destroy(&thAttr);
-
-
   //create all the threads and initilize mutex
   for (int i = 0; i < num_threads; i++) {
     struct thread_args *args = new struct thread_args;
-    
-    struct sched_param params;
-    params.sched_priority = 0;
     //init mutex
     //TODO:use pthread_mutex_init
     mutex_array[i] =  PTHREAD_MUTEX_INITIALIZER;
@@ -322,7 +314,6 @@ int main(int argc, char *argv[]) {
     //TODO-error handling for thread creation mistakes
     pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
     pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
-    int sch = pthread_setschedparam(thread_array[i], SCHED_IDLE,&params);
   }
 
 
