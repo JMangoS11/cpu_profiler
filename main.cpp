@@ -130,40 +130,17 @@ std::string get_cgroup_version() {
 }
 
 //TODO-Finalize this
-bool set_pthread_to_low_prio_cgroup(pthread_t thread) {
-    // Get the Linux thread ID.
-    pid_t tid = syscall(SYS_gettid);
-
-    // Determine the cgroup version.
-    std::string cgroup_version = get_cgroup_version();
-
-    // Compose the path to the cgroup tasks or cgroup.procs file.
-    std::string tasks_file_path;
-    if (cgroup_version == "tmpfs") {
-        tasks_file_path = "/sys/fs/cgroup/cpu/Low_prio_cgroup/tasks";
-    } else if (cgroup_version == "cgroup2fs") {
-        tasks_file_path = "/sys/fs/cgroup/Low_prio_cgroup/cgroup.procs";
-    } else {
-        std::cerr << "Unsupported cgroup version" <<cgroup_version << std::endl;
-        return false;
+void moveCurrentThreadtoLowPrio() {
+    pid_t tid;
+    tid = syscall(SYS_gettid);
+    std::string path = "/sys/fs/cgroup/lw_prgroup/cgroup.procs";
+    std::ofstream ofs(path, std::ios_base::app);
+    if (!ofs) {
+        std::cerr << "Could not open the file\n";
+        return;
     }
-
-    // Open the tasks or cgroup.procs file for writing.
-    std::ofstream tasks_file(tasks_file_path, std::ios_base::app);
-    if (!tasks_file.is_open()) {
-        std::cerr << "Failed to open cgroup tasks file: " << tasks_file_path << std::endl;
-        return false;
-    }
-
-    // Write the thread ID to the tasks or cgroup.procs file.
-    tasks_file << tid;
-    if (tasks_file.fail()) {
-        std::cerr << "Failed to write to cgroup tasks file: " << tasks_file_path << std::endl;
-        return false;
-    }
-
-    tasks_file.close();
-    return true;
+    ofs << tid << "\n";
+    ofs.close();
 }
 
 
@@ -226,7 +203,6 @@ void setArguments(std::vector<std::string_view> arguments){
   verbose = has_option(arguments, "-v");
   const std::string_view str_sleep_time = get_option(arguments, "-d");
   //TODO-show error codes for incorrectly formatted options
-  //TODO-Wrap in function(all options, add help/usage method)
   if(!(str_sleep_time=="")){
     sleep_length = std::stoi(std::string(str_sleep_time));
   }
@@ -324,7 +300,6 @@ int main(int argc, char *argv[]) {
     //TODO:use pthread_mutex_init
     mutex_array[i] =  PTHREAD_MUTEX_INITIALIZER;
     //decide which cores to bind cpus too
-    //TODO-check this, potentially need to reset i
     CPU_ZERO(&cpuset);
     CPU_SET(i, &cpuset);
     //give an id and assign mutex to all threads
@@ -355,7 +330,7 @@ int main(int argc, char *argv[]) {
     initialized = 1;
     pthread_cond_broadcast(&cv);
     //Wait for processors to finish profiling
-    //TODO-sleep every x ms and wake up to see if it's now(potentially) (do some testing)
+    //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
     //set prioclass to SchedRR or schedRT
     std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
     get_cpu_information(num_threads,data_end);
@@ -393,6 +368,7 @@ void* run_computation(void * arg)
 {
     //TODO-Learn how to use kernel shark to visualize whole process
     struct thread_args *args = (struct thread_args *)arg;
+    moveCurrentThreadtoLowPrio();
     while(true) {
       pthread_mutex_lock(&args->mutex);
       while (! initialized) {
