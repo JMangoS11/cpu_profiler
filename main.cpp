@@ -17,6 +17,8 @@
 #include <deque>
 #include <numeric>
 using namespace std::chrono;
+typedef uint64_t u64;
+
 
 //variables to set for testing
 int num_threads = 4;
@@ -49,13 +51,13 @@ struct raw_data {
 struct profiled_data{
   double stddev;
   double ema;
-  std::deque<int> steal_time;
-  int preempts_curr;
+  std::deque<double> steal_time;
+  double preempts_curr;
   double capacity_curr;
   double latency;
 };
 
-double calculateStdDev(const std::deque<int>& v) {
+double calculateStdDev(const std::deque<double>& v) {
     if (v.size() == 0) {
         return 0.0;
     }
@@ -189,7 +191,7 @@ void get_preempts_all(int cpunum, std::vector<raw_data>& preempt_arr) {
     }
 }
 
-void get_cpu_information(std::vector<raw_data>& data_arr){
+void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr){
   std::ifstream f("/proc/preempts");
   std::string s;
   u64 preempts;
@@ -205,25 +207,9 @@ void get_cpu_information(std::vector<raw_data>& data_arr){
 }
 
 
-//get run time of ALL cpus
-void get_run_time_all(int cpunum,std::vector<raw_data>& run_arr){
-  std::ifstream f("/proc/stat");
-  std::string s;
-  int output[cpunum];
-  std::getline(f, s);
-  for (int i = 0; i < cpunum; i++){
-        std::getline(f, s);
-        unsigned n;
-        std::string l;
-        if(std::istringstream(s)>> l >> n)
-        {
-          run_arr[i].run_time = n;
-        }
-  }
-}
 
 //TODO-optimize(With discussed method)	y = pow(0.5, 1/(double)HALFLIFE); https://elixir.bootlin.com/linux/v6.1.31/source/Documentation/scheduler/sched-pelt.c
-double calculate_stealtime_ema(const std::deque<int>& steal_history) {
+double calculate_stealtime_ema(const std::deque<double>& steal_history) {
 
 
     // Start from the most recent history entry and go back maximally 5 places.
@@ -361,10 +347,10 @@ int main(int argc, char *argv[]) {
       std::cout<<profile_time<<std::endl;
       //TODO-use fine grained steal time(custom)
       if(preempts == 0){
-        if(stolen_pass != 0{
-		std::cout<< "incompatible steal/preempt"<<std::endl;
-		return;
-	}
+        if(stolen_pass != 0){
+		  std::cout<< "incompatible steal/preempt"<<std::endl;
+	  	return 1;
+	    }
         result_data[i].latency = 0;
       } else {
 	//TODO-convert to MS per preempt
