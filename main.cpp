@@ -21,7 +21,7 @@ typedef uint64_t u64;
 
 
 //variables to set for testing
-int num_threads = 2;
+int num_threads = std::thread::hardware_concurrency();;
 int sleep_length = 1000;
 int profile_time = 1000;
 int context_window = 5;
