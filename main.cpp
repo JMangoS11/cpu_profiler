@@ -311,6 +311,7 @@ int main(int argc, char *argv[]) {
   std::vector<profiled_data> result_arr;
   data_begin.resize(num_threads);
   data_end.resize(num_threads);
+  result_arr.resize(num_threads);
   //TODO-homogenize
 
   std::deque<std::vector<int>> steal_history;
