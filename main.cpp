@@ -58,7 +58,7 @@ struct raw_data {
 };
 
 struct control_thread_args{
-  std::vector<raw_data> ends_data;
+  std::vector<raw_data> *ends_data;
 };
 
 struct profiled_data{
@@ -281,7 +281,7 @@ void* controlThread(void * arg){
     std::vector<profiled_data> result_arr;
     data_begin.resize(num_threads);
     result_arr.resize(num_threads);
-    std::vector<raw_data> data_end = args->ends_data;
+    std::vector<raw_data> *data_end = args->ends_data;
     while(true){
       //sleep for sleep_length
       std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
@@ -300,8 +300,8 @@ void* controlThread(void * arg){
 
       std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
       
-      get_cpu_information(num_threads,data_end);
-      getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
+      get_cpu_information(num_threads,*data_end);
+      getFinalizedData(num_threads,(double) profile_time,data_begin,*data_end,result_arr);
       profiler_iter++;
       if(verbose){
         printResult(num_threads,result_arr);
@@ -349,8 +349,8 @@ int main(int argc, char *argv[]) {
   }
   pthread_t control_thread;
   struct control_thread_args *cargs = new struct control_thread_args;
-  cargs -> ends_data = data_end;
-  pthread_create(&control_thread, NULL, controlThread, (void *) &cargs);
+  cargs -> ends_data = &data_end;
+  pthread_create(&control_thread, NULL, controlThread, (void *) cargs);
   std::this_thread::sleep_for(std::chrono::milliseconds(200000000000000));
   //start profiling+resting loop
   //TODO-Close or start on command;
