@@ -29,7 +29,7 @@ int profile_time = 100;
 int profiler_iter = 0;
 
 //this decides how many regular profile intervals go by before a "heavy" profile happens, where we try to get the actual capacity of the core
-int heavy_profile_interval = 10;
+int heavy_profile_interval = 100;
 
 int context_window = 5;
 bool verbose = false;
@@ -145,7 +145,7 @@ std::string get_cgroup_version() {
 void moveCurrentThreadtoLowPrio() {
     pid_t tid;
     tid = syscall(SYS_gettid);
-    std::string path = "/sys/fs/cgroup/lw_prgroup/cgroup.procs";
+    std::string path = "/sys/fs/cgroup/lw_prgroup/cgroup.threads";
     std::ofstream ofs(path, std::ios_base::app);
     if (!ofs) {
         std::cerr << "Could not open the file\n";
@@ -153,7 +153,6 @@ void moveCurrentThreadtoLowPrio() {
     }
     ofs << tid << "\n";
     ofs.close();
-    std::cout<<tid<<std::endl;
     struct sched_param params;
     params.sched_priority = sched_get_priority_min(SCHED_IDLE);
     sched_setscheduler(tid,SCHED_IDLE,&params);
@@ -163,7 +162,7 @@ void moveCurrentThreadtoHighPrio() {
     pid_t tid;
     tid = syscall(SYS_gettid);
     
-    std::string path = "/sys/fs/cgroup/hi_prgroup/cgroup.procs";
+    std::string path = "/sys/fs/cgroup/hi_prgroup/cgroup.threads";
     std::ofstream ofs(path, std::ios_base::app);
     if (!ofs) {
         std::cerr << "Could not open the file\n";
@@ -171,12 +170,27 @@ void moveCurrentThreadtoHighPrio() {
     }
     ofs << tid << "\n";
     ofs.close();
-    std::cout<<"this is high"<<tid<<std::endl;
     struct sched_param params;
     params.sched_priority = sched_get_priority_max(SCHED_RR);
     sched_setscheduler(tid,SCHED_RR,&params);
 }
 
+void moveCurrentThread() {
+    pid_t tid;
+    tid = syscall(SYS_gettid);
+    
+    std::string path = "/sys/fs/cgroup/cgroup.procs";
+    std::ofstream ofs(path, std::ios_base::app);
+    if (!ofs) {
+        std::cerr << "Could not open the file\n";
+        return;
+    }
+    ofs << tid << "\n";
+    ofs.close();
+    struct sched_param params;
+    params.sched_priority = sched_get_priority_max(SCHED_RR);
+    sched_setscheduler(tid,SCHED_RR,&params);
+}
 
 void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr){
   std::ifstream f("/proc/preempts");
@@ -297,10 +311,8 @@ void* controlThread(void * arg){
       //Wait for processors to finish profiling
       //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
       //set prioclass to SchedRR or schedRT
-      while(std::chrono::high_resolution_clock::now() < endtime) {
 
-      };
-      //std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
+      std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
       
       get_cpu_information(num_threads,*data_end);
       getFinalizedData(num_threads,(double) profile_time,data_begin,*data_end,result_arr);
@@ -308,6 +320,7 @@ void* controlThread(void * arg){
       if(verbose){
         printResult(num_threads,result_arr);
       }
+
     }
 
 }
@@ -315,7 +328,7 @@ void* controlThread(void * arg){
 
 
 int main(int argc, char *argv[]) {
-  
+  moveCurrentThread();
   //TODO-Seperate Main method to multiple functions, prefetch-Num_threads
   const std::vector<std::string_view> args(argv, argv + argc);
   setArguments(args);
@@ -323,7 +336,6 @@ int main(int argc, char *argv[]) {
   num_threads = sysconf( _SC_NPROCESSORS_ONLN );
   cpu_set_t cpuset;
   CPU_ZERO(&cpuset);
-  moveCurrentThreadtoHighPrio();
   //intialize mutex, threads, and stealtime + runtime trackers
   //TODO-homogenize
   pthread_t thread_array[num_threads];
@@ -350,9 +362,12 @@ int main(int argc, char *argv[]) {
     pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
   }
   pthread_t control_thread;
+
   struct control_thread_args *cargs = new struct control_thread_args;
   cargs -> ends_data = &data_end;
   pthread_create(&control_thread, NULL, controlThread, (void *) cargs);
+  
+  moveCurrentThreadtoLowPrio();
   std::this_thread::sleep_for(std::chrono::milliseconds(200000000000000));
   //start profiling+resting loop
   //TODO-Close or start on command;
