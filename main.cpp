@@ -20,8 +20,8 @@ using namespace std::chrono;
 typedef uint64_t u64;
 
 
-//variables to set for testing
-int num_threads = 2;
+//initialize global variables
+int num_threads = 4;
 int sleep_length = 1000;
 int profile_time = 100;
 
@@ -29,15 +29,11 @@ int profile_time = 100;
 int profiler_iter = 0;
 
 //this decides how many regular profile intervals go by before a "heavy" profile happens, where we try to get the actual capacity of the core
-int heavy_profile_interval = 100;
-
+int heavy_profile_interval = 5;
 int context_window = 5;
 bool verbose = false;
-//initialize global variables
 int initialized = 0;
 std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::_V2::system_clock::duration> endtime;
-int min_prio_for_policy;
-void* sleep_thread(void * arg);
 void* run_computation(void * arg);
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 
@@ -57,9 +53,7 @@ struct raw_data {
   u64 raw_compute;
 };
 
-struct control_thread_args{
-  std::vector<raw_data> *ends_data;
-};
+
 
 struct profiled_data{
   double capacity_perc_stddev;
@@ -128,19 +122,6 @@ bool has_option(
 };
 
 
-std::string get_cgroup_version() {
-  std::ifstream cgroup_controllers("/sys/fs/cgroup/cgroup.controllers");
-  if (cgroup_controllers.is_open()) {  
-    return "cgroup2fs";
-  } else {
-    // Check if the cpu controller is available for cgroup v1
-    std::ifstream cpu_controller("/sys/fs/cgroup/cpu");
-    if (cpu_controller.is_open()) {
-      return "tmpfs";
-    }
-  }
-  return "unknown";
-}
 
 void moveCurrentThreadtoLowPrio() {
     pid_t tid;
@@ -215,9 +196,6 @@ double calculate_ema(double decay_factor, double& ema_help, double prev_ema,doub
   return result;
 }
 
-void ConvertNanosecondstoMilliseconds(u64* time) {
-    *time = *time / 1000000ULL; // There are 1,000,000 nanoseconds in a millisecond
-}
 
 //helper function to set context window to be short
 void addToHistory(std::deque<double>& history_list,double item){
@@ -242,9 +220,10 @@ void setArguments(const std::vector<std::string_view>& arguments) {
         }
     };
     
-    set_option_value("-d", sleep_length);
+    set_option_value("-s", sleep_length);
     set_option_value("-p", profile_time);
     set_option_value("-c", context_window);
+    set_option_value("-i", heavy_profile_interval);
     num_threads = sysconf( _SC_NPROCESSORS_ONLN );
 }
 
