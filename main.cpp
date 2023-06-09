@@ -268,6 +268,41 @@ void printResult(int cpunum,std::vector<profiled_data>& result){
   std::cout<<"--------------"<<std::endl;
 }
 
+void* controlThread(void * arg){
+    moveCurrentThreadtoHighPrio();
+    std::vector<raw_data> data_begin;
+    std::vector<raw_data> data_end;
+    std::vector<profiled_data> result_arr;
+    data_begin.resize(num_threads);
+    data_end.resize(num_threads);
+    result_arr.resize(num_threads);
+    while(true){
+      //sleep for sleep_length
+      std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
+
+      //Set time where threads stop
+      endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
+
+      get_cpu_information(num_threads,data_begin);
+      
+      //wake up threads and broadcast 
+      initialized = 1;
+      pthread_cond_broadcast(&cv);
+      //Wait for processors to finish profiling
+      //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
+      //set prioclass to SchedRR or schedRT
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
+      
+      get_cpu_information(num_threads,data_end);
+      getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
+      profiler_iter++;
+      if(verbose){
+        printResult(num_threads,result_arr);
+      }
+    }
+
+}
 
 
 
@@ -287,13 +322,6 @@ int main(int argc, char *argv[]) {
   pthread_mutex_t mutex_array[num_threads];
   struct thread_args* args_array[num_threads];
 
-  std::vector<raw_data> data_begin;
-  std::vector<raw_data> data_end;
-  std::vector<profiled_data> result_arr;
-  data_begin.resize(num_threads);
-  data_end.resize(num_threads);
-  result_arr.resize(num_threads);
-
   //create all the threads and initilize mutex
   for (int i = 0; i < num_threads; i++) {
     struct thread_args *args = new struct thread_args;
@@ -312,40 +340,12 @@ int main(int argc, char *argv[]) {
     pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
     pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
   }
-  moveCurrentThreadtoHighPrio();
-
+  pthread_t control_thread;
+  struct thread_args *args = new struct thread_args;
+  pthread_create(&control_thread, NULL, controlThread, (void *) args);
+  std::this_thread::sleep_for(std::chrono::milliseconds(200000000000000));
   //start profiling+resting loop
   //TODO-Close or start on command;
-  while(true) {
-
-    //sleep for sleep_length
-    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
-
-    //Set time where threads stop
-    endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
-
-    get_cpu_information(num_threads,data_begin);
-    
-    //wake up threads and broadcast 
-    initialized = 1;
-    pthread_cond_broadcast(&cv);
-    //Wait for processors to finish profiling
-    //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
-    //set prioclass to SchedRR or schedRT
-    while(std::chrono::high_resolution_clock::now() < endtime) {
-        
-      };
-    std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
-    
-    get_cpu_information(num_threads,data_end);
-    getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
-    profiler_iter++;
-    if(verbose){
-    printResult(num_threads,result_arr);
-    }
-    moveCurrentThreadtoHighPrio();
-  }
-
   //join the threads
   for (int i = 0; i < num_threads; i++) {
     pthread_join(thread_array[i], NULL);
