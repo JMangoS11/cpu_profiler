@@ -22,14 +22,14 @@ typedef uint64_t u64;
 
 //variables to set for testing
 int num_threads = 2;
-int sleep_length = 1000;
+int sleep_length = 10000;
 int profile_time = 1000;
 
 //this is for saving how many profiling periods have gone by, so far.
 int profiler_iter = 0;
 
 //this decides how many regular profile intervals go by before a "heavy" profile happens, where we try to get the actual capacity of the core
-int heavy_profile_interval = 5;
+int heavy_profile_interval = 10;
 
 int context_window = 5;
 bool verbose = false;
@@ -147,6 +147,7 @@ void moveCurrentThreadtoLowPrio() {
     }
     ofs << tid << "\n";
     ofs.close();
+    std::cout<<tid<<std::endl;
     struct sched_param params;
     params.sched_priority = sched_get_priority_min(SCHED_IDLE);
     sched_setscheduler(tid,SCHED_IDLE,&params);
@@ -164,6 +165,7 @@ void moveCurrentThreadtoHighPrio() {
     }
     ofs << tid << "\n";
     ofs.close();
+    std::cout<<"this is high"<<tid<<std::endl;
     struct sched_param params;
     params.sched_priority = sched_get_priority_max(SCHED_RR);
     sched_setscheduler(tid,SCHED_RR,&params);
@@ -231,7 +233,9 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
-      result_arr[i].capacity_adj = (1/result_arr[i].capacity_perc) * data_end[i].raw_compute;
+      if (profiler_iter % heavy_profile_interval == 0){
+        result_arr[i].capacity_adj = (1/result_arr[i].capacity_perc) * data_end[i].raw_compute;
+      }
       result_arr[i].preempts = preempts;
 
       if(preempts == 0){
@@ -259,8 +263,9 @@ void printResult(int cpunum,std::vector<profiled_data>& result){
   for (int i = 0; i < cpunum; i++){
         std::cout << "CPU :"<<i<< " Capacity Raw:"<<result[i].capacity_adj <<" Capacity Perc:"<<result[i].capacity_perc<<" Latency:"<<result[i].latency<<" stddev:"<<result[i].capacity_perc_stddev;
         std::cout <<" EMA: "<<result[i].capacity_perc_ema<<"PREMPTS: "<<result[i].preempts <<std::endl;
-
+        
   }
+  std::cout<<"--------------"<<std::endl;
 }
 
 
@@ -307,7 +312,7 @@ int main(int argc, char *argv[]) {
     pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
     pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
   }
-
+  moveCurrentThreadtoHighPrio();
 
   //start profiling+resting loop
   //TODO-Close or start on command;
@@ -327,13 +332,18 @@ int main(int argc, char *argv[]) {
     //Wait for processors to finish profiling
     //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
     //set prioclass to SchedRR or schedRT
+    while(std::chrono::high_resolution_clock::now() < endtime) {
+        
+      };
     std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
-    profiler_iter++;
+    
     get_cpu_information(num_threads,data_end);
     getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
+    profiler_iter++;
     if(verbose){
     printResult(num_threads,result_arr);
     }
+    moveCurrentThreadtoHighPrio();
   }
 
   //join the threads
@@ -369,7 +379,7 @@ void* run_computation(void * arg)
       //here to avoid a race condition
       bool heavy_interval = false;
       if (profiler_iter % heavy_profile_interval == 0){
-        moveCurrentThreadtoHighPrio();
+   
         heavy_interval = true;
       }
       pthread_mutex_lock(&args->mutex);
