@@ -245,6 +245,7 @@ void setArguments(const std::vector<std::string_view>& arguments) {
     set_option_value("-d", sleep_length);
     set_option_value("-p", profile_time);
     set_option_value("-c", context_window);
+    num_threads = sysconf( _SC_NPROCESSORS_ONLN );
 }
 
 
@@ -288,14 +289,11 @@ void printResult(int cpunum,std::vector<profiled_data>& result){
   std::cout<<"--------------"<<std::endl;
 }
 
-void* controlThread(void * arg){
-    moveCurrentThreadtoHighPrio();
-    struct control_thread_args *args = (struct control_thread_args *)arg;
-    std::vector<raw_data> data_begin;
-    std::vector<profiled_data> result_arr;
-    data_begin.resize(num_threads);
-    result_arr.resize(num_threads);
-    std::vector<raw_data> *data_end = args->ends_data;
+void do_profile(std::vector<raw_data>& data_end){
+
+    std::vector<raw_data> data_begin(num_threads);
+    std::vector<profiled_data> result_arr(num_threads);
+
     while(true){
       //sleep for sleep_length
       std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
@@ -308,68 +306,64 @@ void* controlThread(void * arg){
       //wake up threads and broadcast 
       initialized = 1;
       pthread_cond_broadcast(&cv);
+
       //Wait for processors to finish profiling
       //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
-      //set prioclass to SchedRR or schedRT
 
       std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
-      
-      get_cpu_information(num_threads,*data_end);
-      getFinalizedData(num_threads,(double) profile_time,data_begin,*data_end,result_arr);
+    
+      get_cpu_information(num_threads,data_end);
+      getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
       profiler_iter++;
       if(verbose){
         printResult(num_threads,result_arr);
       }
 
     }
+    
 
 }
 
-
-
-int main(int argc, char *argv[]) {
-  moveCurrentThread();
-  //TODO-Seperate Main method to multiple functions, prefetch-Num_threads
-  const std::vector<std::string_view> args(argv, argv + argc);
-  setArguments(args);
-  //get local CPUSET
-  num_threads = sysconf( _SC_NPROCESSORS_ONLN );
+void setup_threads(std::vector<pthread_t>& thread_array,std::vector<raw_data>& data_end){
   cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  //intialize mutex, threads, and stealtime + runtime trackers
-  //TODO-homogenize
-  pthread_t thread_array[num_threads];
-  pthread_mutex_t mutex_array[num_threads];
-  struct thread_args* args_array[num_threads];
-  std::vector<raw_data> data_end;
-  data_end.resize(num_threads);
+
   //create all the threads and initilize mutex
   for (int i = 0; i < num_threads; i++) {
     struct thread_args *args = new struct thread_args;
     //init mutex
     //TODO:use pthread_mutex_init
-    mutex_array[i] =  PTHREAD_MUTEX_INITIALIZER;
     //decide which cores to bind cpus too
     CPU_ZERO(&cpuset);
     CPU_SET(i, &cpuset);
     //give an id and assign mutex to all threads
     args->id = i;
-    args->mutex = mutex_array[i];
+    args->mutex = PTHREAD_MUTEX_INITIALIZER;
     args->addition_calc = &(data_end[i].raw_compute);
     //set prio of thread to MIN
     //TODO-error handling for thread creation mistakes
     pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
     pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
   }
-  pthread_t control_thread;
+}
 
-  struct control_thread_args *cargs = new struct control_thread_args;
-  cargs -> ends_data = &data_end;
-  pthread_create(&control_thread, NULL, controlThread, (void *) cargs);
-  
-  moveCurrentThreadtoLowPrio();
-  std::this_thread::sleep_for(std::chrono::milliseconds(200000000000000));
-  //start profiling+resting loop
+
+
+int main(int argc, char *argv[]) {
+  //the threads need to be moved to root level cgroup before they can be distributed to high/low cgroup
+  moveCurrentThread();
+  moveCurrentThreadtoHighPrio();
+  //Setting up arguments
+  const std::vector<std::string_view> args(argv, argv + argc);
+  setArguments(args);
+
+  std::vector<pthread_t> thread_array(num_threads);
+  //note that this needs to be here because the computations and the main thread need to communicate with each other
+  std::vector<raw_data> data_end(num_threads);
+
+  setup_threads(thread_array,data_end);
+
+  do_profile(data_end);
+
   //TODO-Close or start on command;
   //join the threads
   for (int i = 0; i < num_threads; i++) {
