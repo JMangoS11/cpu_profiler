@@ -24,6 +24,13 @@ typedef uint64_t u64;
 int num_threads = 2;
 int sleep_length = 1000;
 int profile_time = 1000;
+
+//this is for saving how many profiling periods have gone by, so far.
+int profiler_iter = 0;
+
+//this decides how many regular profile intervals go by before a "heavy" profile happens, where we try to get the actual capacity of the core
+int heavy_profile_interval = 5;
+
 int context_window = 5;
 bool verbose = false;
 //initialize global variables
@@ -129,7 +136,6 @@ std::string get_cgroup_version() {
   return "unknown";
 }
 
-//TODO-Finalize this
 void moveCurrentThreadtoLowPrio() {
     pid_t tid;
     tid = syscall(SYS_gettid);
@@ -199,18 +205,24 @@ void addToHistory(std::deque<double>& history_list,double item){
   history_list.push_back(item);
 }
 
-void setArguments(std::vector<std::string_view> arguments){
-  verbose = has_option(arguments, "-v");
-  const std::string_view str_sleep_time = get_option(arguments, "-d");
-  //TODO-show error codes for incorrectly formatted options
-  if(!(str_sleep_time=="")){
-    sleep_length = std::stoi(std::string(str_sleep_time));
-  }
-
-  const std::string_view str_prfl_time = get_option(arguments, "-p");
-  if(!(str_prfl_time=="")){
-    profile_time = std::stoi(std::string(str_prfl_time));
-  }
+void setArguments(const std::vector<std::string_view>& arguments) {
+    verbose = has_option(arguments, "-v");
+    
+    auto set_option_value = [&](const std::string_view& option, int& target) {
+        if (auto value = get_option(arguments, option); !value.empty()) {
+            try {
+                target = std::stoi(std::string(value));
+            } catch(const std::invalid_argument&) {
+                throw std::invalid_argument(std::string("Invalid argument for option ") + std::string(option));
+            } catch(const std::out_of_range&) {
+                throw std::out_of_range(std::string("Out of range argument for option ") + std::string(option));
+            }
+        }
+    };
+    
+    set_option_value("-d", sleep_length);
+    set_option_value("-p", profile_time);
+    set_option_value("-c", context_window);
 }
 
 
@@ -308,7 +320,7 @@ int main(int argc, char *argv[]) {
     endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
 
     get_cpu_information(num_threads,data_begin);
-
+    
     //wake up threads and broadcast 
     initialized = 1;
     pthread_cond_broadcast(&cv);
@@ -316,6 +328,7 @@ int main(int argc, char *argv[]) {
     //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
     //set prioclass to SchedRR or schedRT
     std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
+    profiler_iter++;
     get_cpu_information(num_threads,data_end);
     getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
     if(verbose){
@@ -353,17 +366,27 @@ void* run_computation(void * arg)
     struct thread_args *args = (struct thread_args *)arg;
     moveCurrentThreadtoLowPrio();
     while(true) {
+      //here to avoid a race condition
+      bool heavy_interval = false;
+      if (profiler_iter % heavy_profile_interval == 0){
+        moveCurrentThreadtoHighPrio();
+        heavy_interval = true;
+      }
       pthread_mutex_lock(&args->mutex);
       while (! initialized) {
         pthread_cond_wait(&cv, &args->mutex);
       }
       pthread_mutex_unlock(&args->mutex);
-
+      
       int addition_calculator = 0;
       while(std::chrono::high_resolution_clock::now() < endtime) {
         addition_calculator += 1;
       };
-      *args->addition_calc = addition_calculator;
+      
+      if (heavy_interval){
+        *args->addition_calc = addition_calculator;
+        moveCurrentThreadtoLowPrio();
+      }
       initialized = 0;
       }
       return NULL;
