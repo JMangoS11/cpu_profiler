@@ -297,8 +297,10 @@ void* controlThread(void * arg){
       //Wait for processors to finish profiling
       //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
       //set prioclass to SchedRR or schedRT
+      while(std::chrono::high_resolution_clock::now() < endtime) {
 
-      std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
+      };
+      //std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
       
       get_cpu_information(num_threads,*data_end);
       getFinalizedData(num_threads,(double) profile_time,data_begin,*data_end,result_arr);
