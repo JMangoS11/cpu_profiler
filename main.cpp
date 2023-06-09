@@ -62,7 +62,6 @@ struct profiled_data{
   double preempts_stddev;
 
   double capacity_perc_ema;
-  double capacity_adj_ema;
   double latency_ema;
   double preempts_ema;
 
@@ -261,8 +260,10 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
 
 void printResult(int cpunum,std::vector<profiled_data>& result){
   for (int i = 0; i < cpunum; i++){
-        std::cout << "CPU :"<<i<< " Capacity Raw:"<<result[i].capacity_adj <<" Capacity Perc:"<<result[i].capacity_perc<<" Latency:"<<result[i].latency<<" stddev:"<<result[i].capacity_perc_stddev;
-        std::cout <<" EMA: "<<result[i].capacity_perc_ema<<"PREMPTS: "<<result[i].preempts <<std::endl;
+        std::cout << "CPU:"<<i<<std::endl;
+        std::cout<<" Capacity Perc:"<<result[i].capacity_perc<<" Latency:"<<result[i].latency<<" Preempts: "<<result[i].preempts<<" Capacity Raw:"<<result[i].capacity_adj<<std::endl;
+        std::cout<<"Cperc stddev:"<<result[i].capacity_perc_stdev;
+        std::cout <<" Cperc ema: "<<result[i].capacity_perc_ema <<std::endl;
         
   }
   std::cout<<"--------------"<<std::endl;
