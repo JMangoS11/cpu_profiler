@@ -320,7 +320,7 @@ void do_profile(std::vector<raw_data>& data_end){
       }
 
     }
-    
+
 
 }
 
@@ -398,7 +398,7 @@ void* run_computation(void * arg)
       //here to avoid a race condition
       bool heavy_interval = false;
       if (profiler_iter % heavy_profile_interval == 0){
-   
+        moveCurrentThreadtoHighPrio();
         heavy_interval = true;
       }
       pthread_mutex_lock(&args->mutex);
