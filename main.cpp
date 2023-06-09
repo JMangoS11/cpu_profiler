@@ -181,9 +181,9 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr){
   for (int i = 0; i < cpunum; i++) {
     std::getline(f,s);
     std::getline(f,s);
-    data_arr[i].preempts = std::stoi(s);
+    data_arr[i].preempts = std::stoull(s);
     std::getline(f,s);
-    data_arr[i].steal_time = std::stoi(s);
+    data_arr[i].steal_time = std::stoull(s);
   }
 
 }
