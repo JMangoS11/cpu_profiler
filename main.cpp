@@ -22,8 +22,8 @@ typedef uint64_t u64;
 
 //variables to set for testing
 int num_threads = 2;
-int sleep_length = 10000;
-int profile_time = 1000;
+int sleep_length = 1000;
+int profile_time = 100;
 
 //this is for saving how many profiling periods have gone by, so far.
 int profiler_iter = 0;
@@ -49,10 +49,16 @@ struct thread_args {
   u64 *addition_calc;
 };
 
+
+
 struct raw_data {
   u64 steal_time;
   u64 preempts;
   u64 raw_compute;
+};
+
+struct control_thread_args{
+  std::vector<raw_data> ends_data;
 };
 
 struct profiled_data{
@@ -270,12 +276,12 @@ void printResult(int cpunum,std::vector<profiled_data>& result){
 
 void* controlThread(void * arg){
     moveCurrentThreadtoHighPrio();
+    struct control_thread_args *args = (struct control_thread_args *)arg;
     std::vector<raw_data> data_begin;
-    std::vector<raw_data> data_end;
     std::vector<profiled_data> result_arr;
     data_begin.resize(num_threads);
-    data_end.resize(num_threads);
     result_arr.resize(num_threads);
+    std::vector<raw_data> data_end = args->ends_data;
     while(true){
       //sleep for sleep_length
       std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
@@ -321,7 +327,8 @@ int main(int argc, char *argv[]) {
   pthread_t thread_array[num_threads];
   pthread_mutex_t mutex_array[num_threads];
   struct thread_args* args_array[num_threads];
-
+  std::vector<raw_data> data_end;
+  data_end.resize(num_threads);
   //create all the threads and initilize mutex
   for (int i = 0; i < num_threads; i++) {
     struct thread_args *args = new struct thread_args;
@@ -341,8 +348,9 @@ int main(int argc, char *argv[]) {
     pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
   }
   pthread_t control_thread;
-  struct thread_args *args = new struct thread_args;
-  pthread_create(&control_thread, NULL, controlThread, (void *) args);
+  struct control_thread_args *cargs = new struct control_thread_args;
+  cargs -> ends_data = data_end;
+  pthread_create(&control_thread, NULL, controlThread, (void *) cargs);
   std::this_thread::sleep_for(std::chrono::milliseconds(200000000000000));
   //start profiling+resting loop
   //TODO-Close or start on command;
