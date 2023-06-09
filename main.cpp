@@ -350,7 +350,7 @@ int main(int argc, char *argv[]) {
   pthread_t control_thread;
   struct control_thread_args *cargs = new struct control_thread_args;
   cargs -> ends_data = data_end;
-  pthread_create(&control_thread, NULL, controlThread, (void *) cargs);
+  pthread_create(&control_thread, NULL, controlThread, (void *) &cargs);
   std::this_thread::sleep_for(std::chrono::milliseconds(200000000000000));
   //start profiling+resting loop
   //TODO-Close or start on command;
