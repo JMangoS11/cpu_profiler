@@ -258,8 +258,9 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
       if (profiler_iter % heavy_profile_interval == 0){
-        u64 perf_use = (data_end[i].use_time - data_begin[i].use_time);
-        result_arr[i].capacity_adj = (1/result_arr[i].capacity_perc) * data_end[i].raw_compute * (perf_use/(profile_time*milliseconds_totick_factor));
+        double perf_use = (data_end[i].use_time - data_begin[i].use_time);
+        //std::cout<<perf_use/(profile_time*milliseconds_totick_factor)<<std::endl;
+        result_arr[i].capacity_adj = ((profile_time*milliseconds_totick_factor)/result_arr[i].capacity_perc) * data_end[i].raw_compute * (1/perf_use);
       }
       result_arr[i].preempts = preempts;
 
@@ -444,9 +445,9 @@ void* run_computation(void * arg)
         addition_calculator += 1;
       };
       
-      if (heavy_interval){
-        *args->addition_calc = addition_calculator;
-      }
+    
+      *args->addition_calc = addition_calculator;
+  
       initialized = 0;
       }
       return NULL;
