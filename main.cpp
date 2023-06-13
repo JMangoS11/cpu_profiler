@@ -267,7 +267,7 @@ void printResult(int cpunum,std::vector<profiled_data>& result){
   std::cout<<"--------------"<<std::endl;
 }
 
-void do_profile(std::vector<raw_data>& data_end){
+void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread_arg){
 
     std::vector<raw_data> data_begin(num_threads);
     std::vector<profiled_data> result_arr(num_threads);
@@ -280,7 +280,13 @@ void do_profile(std::vector<raw_data>& data_end){
       endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
 
       get_cpu_information(num_threads,data_begin);
-      
+
+      if (profiler_iter % heavy_profile_interval == 0){
+        for (int i = 0; i < num_threads; i++) {
+          moveThreadtoHighPrio(thread_arg->tid);
+        }
+      }
+
       //wake up threads and broadcast 
       initialized = 1;
       pthread_cond_broadcast(&cv);
@@ -292,14 +298,16 @@ void do_profile(std::vector<raw_data>& data_end){
     
       get_cpu_information(num_threads,data_end);
       getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
+      if (profiler_iter % heavy_profile_interval == 0){
+        for (int i = 0; i < num_threads; i++) {
+          moveThreadtoLowPrio(thread_arg->tid);
+        }
+      }
       profiler_iter++;
       if(verbose){
         printResult(num_threads,result_arr);
       }
-
     }
-
-
 }
 
 std::vector<thread_args*> setup_threads(std::vector<pthread_t>& thread_array,std::vector<raw_data>& data_end){
@@ -356,11 +364,9 @@ int main(int argc, char *argv[]) {
 
   std::vector<thread_args*> threads_arg = setup_threads(thread_array,data_end);
   
-  for (int i = 0; i < num_threads; i++) {
-    std::cout<< threads_arg[i]->tid <<std::endl;
-  }
 
-  do_profile(data_end);
+
+  do_profile(data_end,threads_arg);
 
   //TODO-Close or start on command;
   //join the threads
