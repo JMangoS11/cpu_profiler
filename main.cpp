@@ -182,9 +182,42 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr){
     std::getline(f,s);
     data_arr[i].steal_time = std::stoull(s);
   }
-
 }
 
+double getThreadCpuTimeMillis(pid_t tid) {
+    std::ifstream stat_file("/proc/self/task/" + std::to_string(tid) + "/stat");
+    if (!stat_file) {
+        std::cerr << "Could not open stat file for thread " << tid << std::endl;
+        return -1;
+    }
+
+    // Skip the first 13 fields
+    std::string tmp;
+    for (int i = 0; i < 13; ++i) {
+        stat_file >> tmp;
+    }
+
+    long utime, stime;
+    if (!(stat_file >> utime >> stime)) {
+        std::cerr << "Could not read utime and stime for thread " << tid << std::endl;
+        return -1;
+    }
+
+    long cpu_time_ticks = utime + stime;
+    
+    // Get the number of clock ticks per second
+    long ticks_per_second = sysconf(_SC_CLK_TCK);
+    if (ticks_per_second == -1) {
+        std::cerr << "sysconf failed" << std::endl;
+        return -1;
+    }
+
+    // Convert to milliseconds
+    double cpu_time_seconds = static_cast<double>(cpu_time_ticks) / ticks_per_second;
+    double cpu_time_milliseconds = cpu_time_seconds * 1000;
+
+    return cpu_time_milliseconds;
+}
 
 double calculate_ema(double decay_factor, double& ema_help, double prev_ema,double new_value) {
   double newA = (1+decay_factor*ema_help);
@@ -225,13 +258,13 @@ void setArguments(const std::vector<std::string_view>& arguments) {
 }
 
 
-void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr){
+void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr,std::vector<thread_args*> thread_arg){
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
       if (profiler_iter % heavy_profile_interval == 0){
-        result_arr[i].capacity_adj = (1/result_arr[i].capacity_perc) * data_end[i].raw_compute;
+        result_arr[i].capacity_adj = (1/result_arr[i].capacity_perc) * data_end[i].raw_compute * (getThreadCpuTimeMillis(thread_arg[i]->tid)/profile_time);
       }
       result_arr[i].preempts = preempts;
 
@@ -297,7 +330,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
     
       get_cpu_information(num_threads,data_end);
-      getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
+      getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr,thread_arg);
       if (profiler_iter % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
           moveThreadtoLowPrio(thread_arg[i]->tid);
