@@ -259,7 +259,10 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
       if (profiler_iter % heavy_profile_interval == 0){
         double perf_use = (data_end[i].use_time - data_begin[i].use_time);
-        //std::cout<<perf_use/(profile_time*milliseconds_totick_factor)<<std::endl;
+        std::cout<<"use time"<<perf_use;
+        std::cout<<"profile time"<<profile_time*milliseconds_totick_factor;
+        std::cout<<"additions"<<data_end[i].raw_compute<<std::endl;;
+
         result_arr[i].capacity_adj = ((profile_time*milliseconds_totick_factor)/result_arr[i].capacity_perc) * data_end[i].raw_compute * (1/perf_use);
       }
       result_arr[i].preempts = preempts;
