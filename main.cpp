@@ -45,6 +45,7 @@ struct thread_args {
   int tid = -1;
   pthread_mutex_t mutex;
   u64 *addition_calc;
+  long user_time;
 };
 
 
@@ -194,6 +195,10 @@ void moveCurrentThread() {
     sched_setscheduler(tid,SCHED_RR,&params);
 }
 
+u64 timespec_to_ns(struct timespec* ts) {
+    return ((uint64_t) ts->tv_sec * 1000000000ULL) + (uint64_t) ts->tv_nsec;
+}
+
 void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<thread_args*> thread_arg){
   std::ifstream f("/proc/preempts");
   std::string s;
@@ -205,9 +210,7 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<
     data_arr[i].preempts = std::stoull(s);
     std::getline(f,s);
     data_arr[i].steal_time = std::stoull(s);
-    if (profiler_iter % heavy_profile_interval == 0){
-      data_arr[i].use_time = getThreadCpuTime(thread_arg[i]->tid);
-    }
+
   }
 }
 
@@ -252,18 +255,19 @@ void setArguments(const std::vector<std::string_view>& arguments) {
 }
 
 
-void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr){
+void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr,std::vector<thread_args*> thread_arg){
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
       if (profiler_iter % heavy_profile_interval == 0){
-        double perf_use = (data_end[i].use_time - data_begin[i].use_time);
+        long perf_use = thread_arg[i]->user_time;
         std::cout<<"use time"<<perf_use;
-        std::cout<<"profile time"<<profile_time*milliseconds_totick_factor;
+        std::cout<<"profile time"<<profile_time*1000000;
         std::cout<<"additions"<<data_end[i].raw_compute<<std::endl;;
 
-        result_arr[i].capacity_adj = ((profile_time*milliseconds_totick_factor)/result_arr[i].capacity_perc) * data_end[i].raw_compute * (1/perf_use);
+        result_arr[i].capacity_adj = ((profile_time*1000000)/perf_use) * data_end[i].raw_compute * (1/result_arr[i].capacity_perc);
+        std::cout<<"use factor"<<perf_use/(profile_time*1000000)<<std::endl;
       }
       result_arr[i].preempts = preempts;
 
@@ -329,7 +333,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
     
       get_cpu_information(num_threads,data_end,thread_arg);
-      getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
+      getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr,thread_arg);
       if (profiler_iter % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
           moveThreadtoLowPrio(thread_arg[i]->tid);
@@ -357,7 +361,6 @@ std::vector<thread_args*> setup_threads(std::vector<pthread_t>& thread_array,std
     args->id = i;
     args->mutex = PTHREAD_MUTEX_INITIALIZER;
     args->addition_calc = &(data_end[i].raw_compute);
-    
     //set prio of thread to MIN
     //TODO-error handling for thread creation mistakes
     pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
@@ -432,9 +435,11 @@ void* run_computation(void * arg)
     moveThreadtoLowPrio(syscall(SYS_gettid));
     args->tid = syscall(SYS_gettid);
     while(true) {
+      struct timespec start,end;
       //here to avoid a race condition
       bool heavy_interval = false;
       if (profiler_iter % heavy_profile_interval == 0){
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
         heavy_interval = true;
       }
       pthread_mutex_lock(&args->mutex);
@@ -450,7 +455,14 @@ void* run_computation(void * arg)
       
     
       *args->addition_calc = addition_calculator;
-  
+      if(heavy_interval){
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
+          
+        args->user_time = end.tv_nsec-start.tv_nsec;\
+        if(start.tv_nsec > end.tv_nsec){
+          args->user_time += 1e9;
+        }
+        }
       initialized = 0;
       }
       return NULL;
