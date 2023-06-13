@@ -41,6 +41,7 @@ pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 //Arguments for each thread
 struct thread_args {
   int id;
+  int tid = -1;
   pthread_mutex_t mutex;
   u64 *addition_calc;
 };
@@ -122,9 +123,8 @@ bool has_option(
 
 
 
-void moveCurrentThreadtoLowPrio() {
-    pid_t tid;
-    tid = syscall(SYS_gettid);
+void moveThreadtoLowPrio(pid_t tid) {
+
     std::string path = "/sys/fs/cgroup/lw_prgroup/cgroup.threads";
     std::ofstream ofs(path, std::ios_base::app);
     if (!ofs) {
@@ -138,10 +138,8 @@ void moveCurrentThreadtoLowPrio() {
     sched_setscheduler(tid,SCHED_IDLE,&params);
 }
 
-void moveCurrentThreadtoHighPrio() {
-    pid_t tid;
-    tid = syscall(SYS_gettid);
-    
+void moveThreadtoHighPrio(pid_t tid) {
+
     std::string path = "/sys/fs/cgroup/hi_prgroup/cgroup.threads";
     std::ofstream ofs(path, std::ios_base::app);
     if (!ofs) {
@@ -304,9 +302,9 @@ void do_profile(std::vector<raw_data>& data_end){
 
 }
 
-void setup_threads(std::vector<pthread_t>& thread_array,std::vector<raw_data>& data_end){
+std::vector<thread_args*> setup_threads(std::vector<pthread_t>& thread_array,std::vector<raw_data>& data_end){
   cpu_set_t cpuset;
-
+  std::vector<thread_args*> threads_arg(num_threads);
   //create all the threads and initilize mutex
   for (int i = 0; i < num_threads; i++) {
     struct thread_args *args = new struct thread_args;
@@ -319,11 +317,27 @@ void setup_threads(std::vector<pthread_t>& thread_array,std::vector<raw_data>& d
     args->id = i;
     args->mutex = PTHREAD_MUTEX_INITIALIZER;
     args->addition_calc = &(data_end[i].raw_compute);
+    
     //set prio of thread to MIN
     //TODO-error handling for thread creation mistakes
     pthread_create(&thread_array[i], NULL, run_computation, (void *) args);
     pthread_setaffinity_np(thread_array[i], sizeof(cpu_set_t), &cpuset);
+    threads_arg[i] = args;
   }
+  //we need to make sure that all the threads have fetched the thread ID before we go into whatever computation
+  while(true){
+    bool allset = true;
+    for (int i = 0; i < num_threads; i++) {
+      if(threads_arg[i]->tid == -1 ){
+        bool allset = false;
+      }
+    }
+    if(allset){
+      break;
+    }
+   }
+  
+  return threads_arg;
 }
 
 
@@ -331,7 +345,7 @@ void setup_threads(std::vector<pthread_t>& thread_array,std::vector<raw_data>& d
 int main(int argc, char *argv[]) {
   //the threads need to be moved to root level cgroup before they can be distributed to high/low cgroup
   moveCurrentThread();
-  moveCurrentThreadtoHighPrio();
+  moveThreadtoHighPrio(syscall(SYS_gettid));
   //Setting up arguments
   const std::vector<std::string_view> args(argv, argv + argc);
   setArguments(args);
@@ -340,7 +354,11 @@ int main(int argc, char *argv[]) {
   //note that this needs to be here because the computations and the main thread need to communicate with each other
   std::vector<raw_data> data_end(num_threads);
 
-  setup_threads(thread_array,data_end);
+  std::vector<thread_args*> threads_arg = setup_threads(thread_array,data_end);
+  
+  for (int i = 0; i < num_threads; i++) {
+    std::cout<< threads_arg[i]->tid <<std::endl;
+  }
 
   do_profile(data_end);
 
@@ -373,12 +391,12 @@ void* run_computation(void * arg)
 {
     //TODO-Learn how to use kernel shark to visualize whole process
     struct thread_args *args = (struct thread_args *)arg;
-    moveCurrentThreadtoLowPrio();
+    moveThreadtoLowPrio(syscall(SYS_gettid));
+    args->tid = syscall(SYS_gettid);
     while(true) {
       //here to avoid a race condition
       bool heavy_interval = false;
       if (profiler_iter % heavy_profile_interval == 0){
-        moveCurrentThreadtoHighPrio();
         heavy_interval = true;
       }
       pthread_mutex_lock(&args->mutex);
@@ -394,7 +412,6 @@ void* run_computation(void * arg)
       
       if (heavy_interval){
         *args->addition_calc = addition_calculator;
-        moveCurrentThreadtoLowPrio();
       }
       initialized = 0;
       }
