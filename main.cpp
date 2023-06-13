@@ -283,7 +283,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
 
       if (profiler_iter % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
-          moveThreadtoHighPrio(thread_arg->tid);
+          moveThreadtoHighPrio(thread_arg[i]->tid);
         }
       }
 
@@ -300,7 +300,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
       if (profiler_iter % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
-          moveThreadtoLowPrio(thread_arg->tid);
+          moveThreadtoLowPrio(thread_arg[i]->tid);
         }
       }
       profiler_iter++;
