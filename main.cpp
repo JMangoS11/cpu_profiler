@@ -31,6 +31,7 @@ int profiler_iter = 0;
 //this decides how many regular profile intervals go by before a "heavy" profile happens, where we try to get the actual capacity of the core
 int heavy_profile_interval = 5;
 int context_window = 5;
+double milliseconds_totick_factor = static_cast<double>(sysconf(_SC_CLK_TCK))/1000.0;
 bool verbose = false;
 int initialized = 0;
 std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::_V2::system_clock::duration> endtime;
@@ -52,6 +53,7 @@ struct raw_data {
   u64 steal_time;
   u64 preempts;
   u64 raw_compute;
+  u64 use_time;
 };
 
 
@@ -96,6 +98,28 @@ double calculateStdDev(const std::deque<double>& v) {
     double stdDev = std::sqrt(sq_sum / v.size() - mean * mean);
 
     return stdDev;
+}
+
+u64 getThreadCpuTime(pid_t tid) {
+    std::ifstream stat_file("/proc/self/task/" + std::to_string(tid) + "/stat");
+    if (!stat_file) {
+        std::cerr << "Could not open stat file for thread " << tid << std::endl;
+        return -1;
+    }
+
+    // Skip the first 13 fields
+    std::string tmp;
+    for (int i = 0; i < 13; ++i) {
+        stat_file >> tmp;
+    }
+
+    u64 utime, stime;
+    if (!(stat_file >> utime >> stime)) {
+        std::cerr << "Could not read utime and stime for thread " << tid << std::endl;
+        return -1;
+    }
+
+    return utime + stime;
 }
 
 std::string_view get_option(
@@ -170,7 +194,7 @@ void moveCurrentThread() {
     sched_setscheduler(tid,SCHED_RR,&params);
 }
 
-void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr){
+void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<thread_args*> thread_arg){
   std::ifstream f("/proc/preempts");
   std::string s;
   u64 preempts;
@@ -181,43 +205,13 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr){
     data_arr[i].preempts = std::stoull(s);
     std::getline(f,s);
     data_arr[i].steal_time = std::stoull(s);
+    if (profiler_iter % heavy_profile_interval == 0){
+      data_arr[i].use_time = getThreadCpuTime(thread_arg[i]->tid);
+    }
   }
 }
 
-double getThreadCpuTimeMillis(pid_t tid) {
-    std::ifstream stat_file("/proc/self/task/" + std::to_string(tid) + "/stat");
-    if (!stat_file) {
-        std::cerr << "Could not open stat file for thread " << tid << std::endl;
-        return -1;
-    }
 
-    // Skip the first 13 fields
-    std::string tmp;
-    for (int i = 0; i < 13; ++i) {
-        stat_file >> tmp;
-    }
-
-    long utime, stime;
-    if (!(stat_file >> utime >> stime)) {
-        std::cerr << "Could not read utime and stime for thread " << tid << std::endl;
-        return -1;
-    }
-
-    long cpu_time_ticks = utime + stime;
-    
-    // Get the number of clock ticks per second
-    long ticks_per_second = sysconf(_SC_CLK_TCK);
-    if (ticks_per_second == -1) {
-        std::cerr << "sysconf failed" << std::endl;
-        return -1;
-    }
-
-    // Convert to milliseconds
-    double cpu_time_seconds = static_cast<double>(cpu_time_ticks) / ticks_per_second;
-    double cpu_time_milliseconds = cpu_time_seconds * 1000;
-
-    return cpu_time_milliseconds;
-}
 
 double calculate_ema(double decay_factor, double& ema_help, double prev_ema,double new_value) {
   double newA = (1+decay_factor*ema_help);
@@ -258,13 +252,14 @@ void setArguments(const std::vector<std::string_view>& arguments) {
 }
 
 
-void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr,std::vector<thread_args*> thread_arg){
+void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr){
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
       if (profiler_iter % heavy_profile_interval == 0){
-        result_arr[i].capacity_adj = (1/result_arr[i].capacity_perc) * data_end[i].raw_compute * (getThreadCpuTimeMillis(thread_arg[i]->tid)/profile_time);
+        u64 perf_use = (data_end[i].use_time - data_begin[i].use_time);
+        result_arr[i].capacity_adj = (1/result_arr[i].capacity_perc) * data_end[i].raw_compute * (perf_use/(profile_time*milliseconds_totick_factor));
       }
       result_arr[i].preempts = preempts;
 
@@ -312,7 +307,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       //Set time where threads stop
       endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
 
-      get_cpu_information(num_threads,data_begin);
+      get_cpu_information(num_threads,data_begin,thread_arg);
 
       if (profiler_iter % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
@@ -329,8 +324,8 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
 
       std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
     
-      get_cpu_information(num_threads,data_end);
-      getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr,thread_arg);
+      get_cpu_information(num_threads,data_end,thread_arg);
+      getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr);
       if (profiler_iter % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
           moveThreadtoLowPrio(thread_arg[i]->tid);
