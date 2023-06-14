@@ -473,7 +473,7 @@ void* run_computation(void * arg)
       }
       pthread_mutex_unlock(&args->mutex);
       
-      int addition_calculator = 0;
+      int addition_calculator = 1;
       if (profiler_iter % heavy_profile_interval == 0){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
         heavy_interval = true;
