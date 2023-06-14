@@ -284,7 +284,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
         std::cout<<"profile time"<<profile_time*1000000;
         std::cout<<"additions"<<data_end[i].raw_compute<<std::endl;;
 
-        result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute;
+        result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute ;
         
       }
 
