@@ -45,7 +45,7 @@ struct thread_args {
   int tid = -1;
   pthread_mutex_t mutex;
   u64 *addition_calc;
-  long user_time;
+  double user_time;
 };
 
 
@@ -261,7 +261,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
       if (profiler_iter % heavy_profile_interval == 0){
-        long perf_use = thread_arg[i]->user_time;
+        double perf_use = thread_arg[i]->user_time;
         std::cout<<"use time"<<perf_use;
         std::cout<<"profile time"<<profile_time*1000000;
         std::cout<<"additions"<<data_end[i].raw_compute<<std::endl;;
@@ -428,9 +428,9 @@ int get_profile_time(int cpunum) {
   return 0;
 }
 
-int64_t timespec_diff_to_ns(struct timespec *start, struct timespec *end) {
-    int64_t start_ns = start->tv_sec * 1000000000LL + start->tv_nsec;
-    int64_t end_ns = end->tv_sec * 1000000000LL + end->tv_nsec;
+u64 timespec_diff_to_ns(struct timespec *start, struct timespec *end) {
+    u64 start_ns = start->tv_sec * 1000000000LL + start->tv_nsec;
+    u64 end_ns = end->tv_sec * 1000000000LL + end->tv_nsec;
     return end_ns - start_ns;
 }
 
@@ -462,11 +462,10 @@ void* run_computation(void * arg)
       *args->addition_calc = addition_calculator;
       if(heavy_interval){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
-          
-        args->user_time = end.tv_nsec-start.tv_nsec;
-        if(start.tv_nsec > end.tv_nsec){
-          args->user_time += 1e9;
-        }
+        args->user_time = static_cast<double>(timespec_diff_to_ns(&start, &end)) /
+(static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(profile_time.time_since_epoch()).count()) 
++ static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
+- static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()));  
         }
       initialized = 0;
       }
