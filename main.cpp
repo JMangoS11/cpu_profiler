@@ -428,6 +428,12 @@ int get_profile_time(int cpunum) {
   return 0;
 }
 
+int64_t timespec_diff_to_ns(struct timespec *start, struct timespec *end) {
+    int64_t start_ns = start->tv_sec * 1000000000LL + start->tv_nsec;
+    int64_t end_ns = end->tv_sec * 1000000000LL + end->tv_nsec;
+    return end_ns - start_ns;
+}
+
 void* run_computation(void * arg)
 {
     //TODO-Learn how to use kernel shark to visualize whole process
@@ -438,10 +444,7 @@ void* run_computation(void * arg)
       struct timespec start,end;
       //here to avoid a race condition
       bool heavy_interval = false;
-      if (profiler_iter % heavy_profile_interval == 0){
-        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
-        heavy_interval = true;
-      }
+      
       pthread_mutex_lock(&args->mutex);
       while (! initialized) {
         pthread_cond_wait(&cv, &args->mutex);
@@ -449,16 +452,18 @@ void* run_computation(void * arg)
       pthread_mutex_unlock(&args->mutex);
       
       int addition_calculator = 0;
+      if (profiler_iter % heavy_profile_interval == 0){
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
+        heavy_interval = true;
+      }
       while(std::chrono::high_resolution_clock::now() < endtime) {
         addition_calculator += 1;
       };
-      
-    
       *args->addition_calc = addition_calculator;
       if(heavy_interval){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
           
-        args->user_time = end.tv_nsec-start.tv_nsec;\
+        args->user_time = end.tv_nsec-start.tv_nsec;
         if(start.tv_nsec > end.tv_nsec){
           args->user_time += 1e9;
         }
