@@ -254,6 +254,24 @@ void setArguments(const std::vector<std::string_view>& arguments) {
     num_threads = sysconf( _SC_NPROCESSORS_ONLN );
 }
 
+void process_values(std::vector<profiled_data>& data) {
+    // Step 1: Normalize the capacity_adj values to have an average of 1.
+    double sum = std::accumulate(data.begin(), data.end(), 0.0,
+                                 [](double total, const profiled_data& pd) {
+                                     return total + pd.capacity_adj;
+                                 });
+    double mean = sum / data.size();
+
+    for (profiled_data& pd : data) {
+        pd.capacity_adj /= mean;
+    }
+
+    // Step 2: Round capacity_adj to nearest multiple of 0.2
+    for (profiled_data& pd : data) {
+        pd.capacity_adj = std::round(pd.capacity_adj * 5) / 5;
+    }
+}
+
 
 void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr,std::vector<thread_args*> thread_arg){
   for (int i = 0; i < numthreads; i++) {
@@ -267,7 +285,9 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
         std::cout<<"additions"<<data_end[i].raw_compute<<std::endl;;
 
         result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute * (1/result_arr[i].capacity_perc);
+        
       }
+
       result_arr[i].preempts = preempts;
 
       if(preempts == 0){
@@ -289,6 +309,9 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
     };
+    if (profiler_iter % heavy_profile_interval == 0){
+        process_values(result_arr);
+      }
 }
 
 void printResult(int cpunum,std::vector<profiled_data>& result,std::vector<thread_args*> thread_arg){
