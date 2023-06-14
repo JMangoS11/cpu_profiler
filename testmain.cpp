@@ -481,7 +481,7 @@ void* run_computation(void * arg)
       while(std::chrono::high_resolution_clock::now() < endtime) {
         addition_calculator += 1;
       };
-      *args->addition_calc = addition_calculator;
+      *args->addition_calc = (addition_calculator+1);
       if(heavy_interval){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
         args->user_time = args->user_time = static_cast<double>(timespec_diff_to_ns(&start, &end)+1) /
