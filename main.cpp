@@ -310,7 +310,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
     };
     if (profiler_iter % heavy_profile_interval == 0){
-        process_values(result_arr);
+        //process_values(result_arr);
       }
 }
 
