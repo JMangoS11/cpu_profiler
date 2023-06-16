@@ -492,9 +492,9 @@ void* run_computation(void * arg)
 + static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
 - static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()));
         if(test>1){
-          std::cout<<"SOMETHING IS WRONG"<< timespec_diff_to_ns(&start, &end) <<" WHAT"<<profile_time * 1e6 
+          std::cout<<"SOMETHING IS WRONG"<< timespec_diff_to_ns(&start, &end) <<" WHAT"<<(profile_time * 1e6 
 + static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
-- static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count();
+- static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()))<<std::endl;
         }
         args->user_time = test;
         }
