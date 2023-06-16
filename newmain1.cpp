@@ -45,7 +45,7 @@ struct thread_args {
   int tid = -1;
   pthread_mutex_t mutex;
   u64 *addition_calc;
-  double user_time;
+  long user_time;
 };
 
 
@@ -173,6 +173,9 @@ void moveThreadtoHighPrio(pid_t tid) {
     }
     ofs << tid << "\n";
     ofs.close();
+    struct sched_param params;
+    params.sched_priority = sched_get_priority_max(SCHED_RR);
+    sched_setscheduler(tid,SCHED_RR,&params);
 }
 
 void moveCurrentThread() {
@@ -251,42 +254,23 @@ void setArguments(const std::vector<std::string_view>& arguments) {
     num_threads = sysconf( _SC_NPROCESSORS_ONLN );
 }
 
-void process_values(std::vector<profiled_data>& data) {
-    // Step 1: Normalize the capacity_adj values to have an average of 1.
-    double sum = std::accumulate(data.begin(), data.end(), 0.0,
-                                 [](double total, const profiled_data& pd) {
-                                     return total + pd.capacity_adj;
-                                 });
-    double mean = sum / data.size();
-
-    for (profiled_data& pd : data) {
-        pd.capacity_adj /= mean;
-    }
-
-    // Step 2: Round capacity_adj to nearest multiple of 0.2
-    for (profiled_data& pd : data) {
-        pd.capacity_adj = std::round(pd.capacity_adj * 5) / 5;
-    }
-}
-
 
 void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr,std::vector<thread_args*> thread_arg){
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
-      if(preempts == 0){
-        std::cout<<"something went wrong"<<profile_time<<"Idk "<<data_begin[i].preempts<<" stl"<<data_begin[i].steal_time<<" aa"<<data_end[i].steal_time;
-      }
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
       if (profiler_iter % heavy_profile_interval == 0){
-        double perf_use = thread_arg[i]->user_time;
+        long perf_use = thread_arg[i]->user_time;
         std::cout<<"use time"<<perf_use;
+        std::cout<<"profile time"<<profile_time*1000000;
+        std::cout<<"additions"<<data_end[i].raw_compute<<std::endl;;
 
-        result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute * 1/result_arr[i].capacity_perc;
-        
+        result_arr[i].capacity_adj = ((profile_time*1000000)/perf_use) * data_end[i].raw_compute * (1/result_arr[i].capacity_perc);
+        std::cout<<"use factor"<<perf_use/(profile_time*1000000)<<std::endl;
       }
-
       result_arr[i].preempts = preempts;
+
       if(preempts == 0){
         if(stolen_pass != 0){
           std::cout<< "incompatible steal/preempt"<<std::endl;
@@ -306,9 +290,6 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
     };
-    if (profiler_iter % heavy_profile_interval == 0){
-        //process_values(result_arr);
-      }
 }
 
 void printResult(int cpunum,std::vector<profiled_data>& result,std::vector<thread_args*> thread_arg){
@@ -333,31 +314,29 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
 
       //Set time where threads stop
       endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
-      if ((profiler_iter-1) % heavy_profile_interval == 0){
+
+      get_cpu_information(num_threads,data_begin,thread_arg);
+
+      if (profiler_iter % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
-          moveThreadtoLowPrio(thread_arg[i]->tid);
+          moveThreadtoHighPrio(thread_arg[i]->tid);
         }
       }
 
       //wake up threads and broadcast 
       initialized = 1;
       pthread_cond_broadcast(&cv);
-      endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
-      get_cpu_information(num_threads,data_begin,thread_arg);
+
       //Wait for processors to finish profiling
       //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
 
       std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
     
       get_cpu_information(num_threads,data_end,thread_arg);
-	double test = (profile_time 
-+ static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())
-- static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(endtime.time_since_epoch()).count()));
-
-      getFinalizedData(num_threads,test,data_begin,data_end,result_arr,thread_arg);
-      if ((profiler_iter+1) % heavy_profile_interval == 0){
+      getFinalizedData(num_threads,(double) profile_time,data_begin,data_end,result_arr,thread_arg);
+      if (profiler_iter % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
-          moveThreadtoHighPrio(thread_arg[i]->tid);
+          moveThreadtoLowPrio(thread_arg[i]->tid);
         }
       }
       profiler_iter++;
@@ -409,7 +388,7 @@ std::vector<thread_args*> setup_threads(std::vector<pthread_t>& thread_array,std
 int main(int argc, char *argv[]) {
   //the threads need to be moved to root level cgroup before they can be distributed to high/low cgroup
   moveCurrentThread();
-  
+  moveThreadtoHighPrio(syscall(SYS_gettid));
   //Setting up arguments
   const std::vector<std::string_view> args(argv, argv + argc);
   setArguments(args);
@@ -419,8 +398,7 @@ int main(int argc, char *argv[]) {
   std::vector<raw_data> data_end(num_threads);
 
   std::vector<thread_args*> threads_arg = setup_threads(thread_array,data_end);
-   moveThreadtoHighPrio(syscall(SYS_gettid));
-
+  
 
 
   do_profile(data_end,threads_arg);
@@ -450,12 +428,6 @@ int get_profile_time(int cpunum) {
   return 0;
 }
 
-u64 timespec_diff_to_ns(struct timespec *start, struct timespec *end) {
-    u64 start_ns = start->tv_sec * 1000000000LL + start->tv_nsec;
-    u64 end_ns = end->tv_sec * 1000000000LL + end->tv_nsec;
-    return end_ns - start_ns;
-}
-
 void* run_computation(void * arg)
 {
     //TODO-Learn how to use kernel shark to visualize whole process
@@ -466,32 +438,31 @@ void* run_computation(void * arg)
       struct timespec start,end;
       //here to avoid a race condition
       bool heavy_interval = false;
-      bool test_interval = false;
+      if (profiler_iter % heavy_profile_interval == 0){
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
+        heavy_interval = true;
+      }
       pthread_mutex_lock(&args->mutex);
       while (! initialized) {
         pthread_cond_wait(&cv, &args->mutex);
       }
       pthread_mutex_unlock(&args->mutex);
       
-      int addition_calculator = 1;
-      if (profiler_iter % heavy_profile_interval == 0){
-        moveThreadtoHighPrio(syscall(SYS_gettid));
-        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
-        heavy_interval = true;
-      }
+      int addition_calculator = 0;
       while(std::chrono::high_resolution_clock::now() < endtime) {
         addition_calculator += 1;
       };
+      
+    
       *args->addition_calc = addition_calculator;
       if(heavy_interval){
-        moveThreadtoLowPrio(syscall(SYS_gettid));
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
-        args->user_time = args->user_time = static_cast<double>(timespec_diff_to_ns(&start, &end)+1) /
-(profile_time * 1e6 
-+ static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
-- static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()));
+          
+        args->user_time = end.tv_nsec-start.tv_nsec;\
+        if(start.tv_nsec > end.tv_nsec){
+          args->user_time += 1e9;
         }
-      
+        }
       initialized = 0;
       }
       return NULL;
