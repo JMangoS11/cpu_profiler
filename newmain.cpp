@@ -332,7 +332,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
 
       //Set time where threads stop
-      endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
+      endtime = high_resolution_clock::now() + std::chrono::milliseconds(1000000000);
       if ((profiler_iter-1) % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
           moveThreadtoLowPrio(thread_arg[i]->tid);
@@ -342,6 +342,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       //wake up threads and broadcast 
       initialized = 1;
       pthread_cond_broadcast(&cv);
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
       endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
       get_cpu_information(num_threads,data_begin,thread_arg);
       //Wait for processors to finish profiling
