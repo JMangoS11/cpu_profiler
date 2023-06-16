@@ -344,7 +344,6 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       //wake up threads and broadcast 
       initialized = 1;
       pthread_cond_broadcast(&cv);
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
       endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
       get_cpu_information(num_threads,data_begin,thread_arg);
       //Wait for processors to finish profiling
