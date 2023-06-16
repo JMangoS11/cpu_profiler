@@ -367,7 +367,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
           moveThreadtoHighPrio(thread_arg[i]->tid);
         }
       }
-      big_test=false;
+      bigtest=false;
       profiler_iter++;
       if(verbose){
         printResult(num_threads,result_arr,thread_arg);
