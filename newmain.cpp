@@ -474,7 +474,7 @@ void* run_computation(void * arg)
       }
       pthread_mutex_unlock(&args->mutex);
       
-      int addition_calculator = 1;
+      int addition_calculator = 0;
       if (profiler_iter % heavy_profile_interval == 0){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
         heavy_interval = true;
@@ -485,7 +485,7 @@ void* run_computation(void * arg)
       *args->addition_calc = addition_calculator;
       if(heavy_interval){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
-        args->user_time = args->user_time = static_cast<double>(timespec_diff_to_ns(&start, &end)+1) /
+        args->user_time = args->user_time = static_cast<double>(timespec_diff_to_ns(&start, &end)) /
 (profile_time * 1e6 
 + static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
 - static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()));
