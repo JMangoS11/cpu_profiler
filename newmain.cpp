@@ -33,6 +33,7 @@ int heavy_profile_interval = 5;
 int context_window = 5;
 double milliseconds_totick_factor = static_cast<double>(sysconf(_SC_CLK_TCK))/1000.0;
 bool verbose = false;
+bool bigtest = false;
 int initialized = 0;
 std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::_V2::system_clock::duration> endtime;
 void* run_computation(void * arg);
@@ -344,6 +345,10 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       //wake up threads and broadcast 
       initialized = 1;
       pthread_cond_broadcast(&cv);
+      if((profiler_iter) % heavy_profile_interval == 0){
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        bigtest=true;
+      }
       endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
       get_cpu_information(num_threads,data_begin,thread_arg);
       //Wait for processors to finish profiling
@@ -362,6 +367,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
           moveThreadtoHighPrio(thread_arg[i]->tid);
         }
       }
+      big_test=false;
       profiler_iter++;
       if(verbose){
         printResult(num_threads,result_arr,thread_arg);
@@ -477,8 +483,10 @@ void* run_computation(void * arg)
       
       int addition_calculator = 0;
       if (profiler_iter % heavy_profile_interval == 0){
+        while(!bigtest){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
         heavy_interval = true;
+        }
       }
       while(std::chrono::high_resolution_clock::now() < endtime) {
         addition_calculator += 1;
