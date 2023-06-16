@@ -283,7 +283,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
         std::cout<<"use time"<<perf_use;
 
         result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute * 1/result_arr[i].capacity_perc;
-        if(result_arr[i].capacity_adj<100000){
+        if(result_arr[i].capacity_adj<1000000){
           std::cout<<"LISTEN UP"<<data_end[i].raw_compute<<"WHAAAA "<<(1/perf_use)<<std::endl;
         }
       }
