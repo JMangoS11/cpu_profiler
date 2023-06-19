@@ -499,7 +499,7 @@ void* run_computation(void * arg)
         
         double test = static_cast<double>(timespec_diff_to_ns(&start, &end)) /static_cast<double>(timespec_diff_to_ns(&lstart, &lend));
         
-      if(addition_calculator<1000000){
+      if(addition_calculator<10000000){
         std::cout<<" SOMETHING IS WRONG"<< timespec_diff_to_ns(&start, &end) <<" WHAT"<<static_cast<double>(timespec_diff_to_ns(&lstart, &lend))<<
         " HHHU"<<(profile_time * 1e6 
 + static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
