@@ -471,7 +471,7 @@ void* run_computation(void * arg)
     moveThreadtoLowPrio(syscall(SYS_gettid));
     args->tid = syscall(SYS_gettid);
     while(true) {
-      struct timespec start,end;
+      struct timespec start,end,lstart,lend;
       //here to avoid a race condition
       bool heavy_interval = false;
       bool test_interval = false;
@@ -485,6 +485,7 @@ void* run_computation(void * arg)
       if (profiler_iter % heavy_profile_interval == 0){
         while(!bigtest){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
+        clock_gettime(CLOCK_MONOTONIC, &lstart);
         heavy_interval = true;
         }
       }
@@ -494,10 +495,8 @@ void* run_computation(void * arg)
       *args->addition_calc = addition_calculator;
       if(heavy_interval){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
-        double test = static_cast<double>(timespec_diff_to_ns(&start, &end)) /
-(profile_time * 1e6 
-+ static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
-- static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()));
+        clock_gettime(CLOCK_MONOTONIC, &lend);
+        double test = static_cast<double>(timespec_diff_to_ns(&start, &end)) /static_cast<double>(timespec_diff_to_ns(&lstart, &lend))
         if(test>1){
           std::cout<<"SOMETHING IS WRONG"<< timespec_diff_to_ns(&start, &end) <<" WHAT"<<(profile_time * 1e6 
 + static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
