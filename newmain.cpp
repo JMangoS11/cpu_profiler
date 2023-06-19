@@ -489,7 +489,7 @@ void* run_computation(void * arg)
         heavy_interval = true;
         }
       }
-      while(std::chrono::high_resolution_clock::now() < endtime) {
+      while((addition_calculator%10000 ==0) && std::chrono::high_resolution_clock::now() < endtime) {
         addition_calculator += 1;
       };
       *args->addition_calc = addition_calculator;
