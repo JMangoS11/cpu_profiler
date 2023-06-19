@@ -500,10 +500,10 @@ void* run_computation(void * arg)
         double test = static_cast<double>(timespec_diff_to_ns(&start, &end)) /static_cast<double>(timespec_diff_to_ns(&lstart, &lend));
         
       if(addition_calculator<1000000){
-        std::cout<<" SOMETHING IS WRONG"<< timespec_diff_to_ns(&start, &end) <<" WHAT"<<static_cast<double>(timespec_diff_to_ns(&lstart, &lend))<<
-        " HHHU"<<(profile_time * 1e6 
+        std::cout<<"Clock CPUTIME:"<< timespec_diff_to_ns(&start, &end) <<" Clock Monotonic"<<static_cast<double>(timespec_diff_to_ns(&lstart, &lend))<<
+        " Profile Calc"<<(profile_time * 1e6 
 + static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
-- static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()))<<"EH?"<<addition_calculator<<std::endl;
+- static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()))<<" Additions"<<addition_calculator<<std::endl;
       }
         if(test>1){
           std::cout<<"SOMETHING IS WRONG"<< timespec_diff_to_ns(&start, &end) <<" WHAT"<<(profile_time * 1e6 
