@@ -33,7 +33,7 @@ int heavy_profile_interval = 5;
 int context_window = 5;
 double milliseconds_totick_factor = static_cast<double>(sysconf(_SC_CLK_TCK))/1000.0;
 bool verbose = false;
-bool bigtest = false;
+bool awake_workers_flag = false;
 int initialized = 0;
 std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::_V2::system_clock::duration> endtime;
 void* run_computation(void * arg);
@@ -326,6 +326,15 @@ void printResult(int cpunum,std::vector<profiled_data>& result,std::vector<threa
   std::cout<<"--------------"<<std::endl;
 }
 
+void waitforWorkers(){
+  pthread_mutex_lock(&ready_check);
+  while(ready_counter != num_threads){
+    pthread_cond_wait(&cv1, &ready_check);
+  }
+  pthread_mutex_unlock(&ready_check);
+  ready_counter = 0;
+}
+
 void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread_arg){
 
     std::vector<raw_data> data_begin(num_threads);
@@ -347,8 +356,8 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       initialized = 1;
       pthread_cond_broadcast(&cv);
       if((profiler_iter) % heavy_profile_interval == 0){
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        bigtest=true;
+        waitforWorkers();
+        awake_workers_flag=true;
       }
       endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
       get_cpu_information(num_threads,data_begin,thread_arg);
@@ -358,16 +367,12 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
     
       get_cpu_information(num_threads,data_end,thread_arg);
-	double test = (profile_time 
-+ static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())
-- static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(endtime.time_since_epoch()).count()));
+          double test = (profile_time 
+        + static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())
+        - static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(endtime.time_since_epoch()).count()));
 
       if ((profiler_iter) % heavy_profile_interval == 0){
-        pthread_mutex_lock(&ready_check);
-        while(ready_counter != num_threads){
-          pthread_cond_wait(&cv1, &ready_check);
-        }
-        pthread_mutex_unlock(&ready_check);
+        waitforWorkers();
       }
       getFinalizedData(num_threads,test,data_begin,data_end,result_arr,thread_arg);
       if ((profiler_iter+1) % heavy_profile_interval == 0){
@@ -375,7 +380,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
           moveThreadtoHighPrio(thread_arg[i]->tid);
         }
       }
-      bigtest=false;
+      awake_workers_flag=false;
       profiler_iter++;
       if(verbose){
         printResult(num_threads,result_arr,thread_arg);
@@ -472,6 +477,15 @@ u64 timespec_diff_to_ns(struct timespec *start, struct timespec *end) {
     return end_ns - start_ns;
 }
 
+void 
+
+void alertMainThread(){
+  pthread_mutex_lock(&ready_check);
+  ready_counter += 1;
+  pthread_mutex_unlock(&ready_check);
+  pthread_cond_signal(&cv1);
+}
+
 void* run_computation(void * arg)
 {
     //TODO-Learn how to use kernel shark to visualize whole process
@@ -482,7 +496,7 @@ void* run_computation(void * arg)
       struct timespec start,end,lstart,lend;
       //here to avoid a race condition
       bool heavy_interval = false;
-      bool test_interval = false;
+
       pthread_mutex_lock(&args->mutex);
       while (! initialized) {
         pthread_cond_wait(&cv, &args->mutex);
@@ -491,7 +505,8 @@ void* run_computation(void * arg)
       
       int addition_calculator = 0;
       if (profiler_iter % heavy_profile_interval == 0){
-        while(!bigtest){
+        alertMainThread();
+        while(!awake_workers_flag){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
         clock_gettime(CLOCK_MONOTONIC, &lstart);
         heavy_interval = true;
@@ -504,27 +519,13 @@ void* run_computation(void * arg)
       if(heavy_interval){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
         clock_gettime(CLOCK_MONOTONIC, &lend);
-        
+
         double test = static_cast<double>(timespec_diff_to_ns(&start, &end)) /static_cast<double>(timespec_diff_to_ns(&lstart, &lend));
-        
-      if(addition_calculator<1000000){
-        std::cout<<"Clock CPUTIME:"<< timespec_diff_to_ns(&start, &end) <<" Clock Monotonic"<<static_cast<double>(timespec_diff_to_ns(&lstart, &lend))<<
-        " Profile Calc"<<(profile_time * 1e6 
-+ static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
-- static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()))<<" Additions"<<addition_calculator<<std::endl;
-      }
-        if(test>1){
-          std::cout<<"duration longer then top"<< timespec_diff_to_ns(&start, &end) <<" WHAT"<<(profile_time * 1e6  
-+ static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
-  - static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()))<<"EH?"<<addition_calculator<<std::endl;
-        }
+
         args->user_time = test;
-        pthread_mutex_lock(&ready_check);
-        ready_counter += 1;
-        pthread_mutex_unlock(&ready_check);
-        pthread_cond_signal(&cv1);
+        alertMainThread();
+
         }
-      
       initialized = 0;
       }
       return NULL;
