@@ -38,8 +38,9 @@ int initialized = 0;
 std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::_V2::system_clock::duration> endtime;
 void* run_computation(void * arg);
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
-
-
+pthread_cond_t cv1 = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t ready_check = PTHREAD_MUTEX_INITIALIZER;
+int ready_counter = 0;
 //Arguments for each thread
 struct thread_args {
   int id;
@@ -362,7 +363,11 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
 - static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(endtime.time_since_epoch()).count()));
 
       if ((profiler_iter) % heavy_profile_interval == 0){
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        pthread_mutex_lock(&ready_check);
+        while(ready_counter != num_threads){
+          pthread_cond_wait(&cv1, &ready_check);
+        }
+        pthread_mutex_unlock(&ready_check);
       }
       getFinalizedData(num_threads,test,data_begin,data_end,result_arr,thread_arg);
       if ((profiler_iter+1) % heavy_profile_interval == 0){
@@ -514,6 +519,10 @@ void* run_computation(void * arg)
   - static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()))<<"EH?"<<addition_calculator<<std::endl;
         }
         args->user_time = test;
+        pthread_mutex_lock(&ready_check);
+        ready_counter += 1;
+        pthread_mutex_unlock(&ready_check);
+        pthread_cond_signal(&cv1);
         }
       
       initialized = 0;
