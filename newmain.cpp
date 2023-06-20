@@ -103,27 +103,6 @@ double calculateStdDev(const std::deque<double>& v) {
     return stdDev;
 }
 
-u64 getThreadCpuTime(pid_t tid) {
-    std::ifstream stat_file("/proc/self/task/" + std::to_string(tid) + "/stat");
-    if (!stat_file) {
-        std::cerr << "Could not open stat file for thread " << tid << std::endl;
-        return -1;
-    }
-
-    // Skip the first 13 fields
-    std::string tmp;
-    for (int i = 0; i < 13; ++i) {
-        stat_file >> tmp;
-    }
-
-    u64 utime, stime;
-    if (!(stat_file >> utime >> stime)) {
-        std::cerr << "Could not read utime and stime for thread " << tid << std::endl;
-        return -1;
-    }
-
-    return utime + stime;
-}
 
 std::string_view get_option(
     const std::vector<std::string_view>& args, 
@@ -136,6 +115,7 @@ std::string_view get_option(
     
     return "";
 };
+
 
 bool has_option(
     const std::vector<std::string_view>& args, 
@@ -177,10 +157,10 @@ void moveThreadtoHighPrio(pid_t tid) {
     ofs.close();
 }
 
+
 void moveCurrentThread() {
     pid_t tid;
     tid = syscall(SYS_gettid);
-    
     std::string path = "/sys/fs/cgroup/cgroup.procs";
     std::ofstream ofs(path, std::ios_base::app);
     if (!ofs) {
@@ -194,9 +174,6 @@ void moveCurrentThread() {
     sched_setscheduler(tid,SCHED_RR,&params);
 }
 
-u64 timespec_to_ns(struct timespec* ts) {
-    return ((uint64_t) ts->tv_sec * 1000000000ULL) + (uint64_t) ts->tv_nsec;
-}
 
 void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<thread_args*> thread_arg){
   std::ifstream f("/proc/preempts");
@@ -212,8 +189,6 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<
 
   }
 }
-
-
 
 double calculate_ema(double decay_factor, double& ema_help, double prev_ema,double new_value) {
   double newA = (1+decay_factor*ema_help);
@@ -276,21 +251,12 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
-      if(preempts == 0){
-        std::cout<<"something went wrong"<<profile_time<<"Idk "<<data_begin[i].preempts<<" stl"<<data_begin[i].steal_time<<" aa"<<data_end[i].steal_time;
-      }
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
+      result_arr[i].preempts = preempts;
       if (profiler_iter % heavy_profile_interval == 0){
         double perf_use = thread_arg[i]->user_time;
-        std::cout<<"use time"<<perf_use;
-
         result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute * 1/result_arr[i].capacity_perc;
-        if(result_arr[i].capacity_adj<1000000){
-          std::cout<<"LISTEN UP"<<data_end[i].raw_compute<<"WHAAAA "<<(1/perf_use)<<std::endl;
-        }
       }
-
-      result_arr[i].preempts = preempts;
       if(preempts == 0){
         if(stolen_pass != 0){
           std::cout<< "incompatible steal/preempt"<<std::endl;
@@ -341,41 +307,52 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
     std::vector<profiled_data> result_arr(num_threads);
 
     while(true){
-      //sleep for sleep_length
-      std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
 
-      //Set time where threads stop
-      endtime = high_resolution_clock::now() + std::chrono::milliseconds(1000000000);
+      //If the last interval was heavy, move the threads to low priority.
       if ((profiler_iter-1) % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
           moveThreadtoLowPrio(thread_arg[i]->tid);
         }
       }
+      
+      //sleep during sleep
+      std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
+
+      //We want to set the endtime and get data immediately after the threads have woken up in order to minimize innacuracy, this is to keep threads waiting
+      endtime = high_resolution_clock::now() + std::chrono::milliseconds(1000000000);
+
+      //this is for the heavy profile period
       awake_workers_flag=false;
+      
       //wake up threads and broadcast 
       initialized = 1;
       pthread_cond_broadcast(&cv);
+
+      //if it's a heavy profile period wait for the workers to wake up
       if((profiler_iter) % heavy_profile_interval == 0){
         waitforWorkers();
         awake_workers_flag=true;
       }
+
+      //set the endtime and get data
       endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
       get_cpu_information(num_threads,data_begin,thread_arg);
-      //Wait for processors to finish profiling
-      //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
 
+      //sleep during profiling
       std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
-    
-      
-          double test = (profile_time 
-        + static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())
-        - static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(endtime.time_since_epoch()).count()));
 
+      //wait for everybody to finish reporting data
       if ((profiler_iter) % heavy_profile_interval == 0){
         waitforWorkers();
       }
+      
       get_cpu_information(num_threads,data_end,thread_arg);
+      //get actual profiling period
+      double test = (profile_time 
+        + static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())
+        - static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(endtime.time_since_epoch()).count()));
       getFinalizedData(num_threads,test,data_begin,data_end,result_arr,thread_arg);
+       //If the next interval is heavy, move the threads to high priority.
       if ((profiler_iter+1) % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
           moveThreadtoHighPrio(thread_arg[i]->tid);
