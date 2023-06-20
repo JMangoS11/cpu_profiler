@@ -351,7 +351,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
           moveThreadtoLowPrio(thread_arg[i]->tid);
         }
       }
-
+      awake_workers_flag=false;
       //wake up threads and broadcast 
       initialized = 1;
       pthread_cond_broadcast(&cv);
@@ -380,7 +380,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
           moveThreadtoHighPrio(thread_arg[i]->tid);
         }
       }
-      awake_workers_flag=false;
+      
       profiler_iter++;
       if(verbose){
         printResult(num_threads,result_arr,thread_arg);
@@ -477,7 +477,7 @@ u64 timespec_diff_to_ns(struct timespec *start, struct timespec *end) {
     return end_ns - start_ns;
 }
 
-void 
+
 
 void alertMainThread(){
   pthread_mutex_lock(&ready_check);
@@ -507,11 +507,12 @@ void* run_computation(void * arg)
       if (profiler_iter % heavy_profile_interval == 0){
         alertMainThread();
         while(!awake_workers_flag){
+        }
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
         clock_gettime(CLOCK_MONOTONIC, &lstart);
         heavy_interval = true;
-        }
       }
+      
       while(((std::chrono::high_resolution_clock::now() < endtime))) {
         addition_calculator += 1;
       };
