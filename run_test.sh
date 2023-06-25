@@ -20,8 +20,8 @@ ssh -T ubuntu@e-vm1 << EOF
     sudo nohup sysbench --threads=16 --time=180 cpu run > pre_prober_sysbench.txt &
 EOF
 
-ssh -T ubuntu@e-vm1 'echo "$(date): Initializ competition" >> prober_output.txt'
-
+ssh -T ubuntu@e-vm1 'echo "$(date): Initialize competition and sysbench" >> prober_output.txt'
+ssh -T ubuntu@e-vm1 'sudo nohup sysbench --threads=16 cpu run > pre_prober_sysbench.txt &'
 # Initialize competition on physical cores
 taskset -c 0-3 sysbench --threads=4 cpu run &
 taskset -c 4-7 sysbench --threads=4 cpu run &
