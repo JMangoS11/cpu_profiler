@@ -17,11 +17,11 @@ EOF
 ssh -T ubuntu@e-vm1 'echo "$(date): Starting prober" >> prober_output.txt; nohup sudo ./a.out -p 100 -s 1000 -v -i 20 >> prober_output.txt 2>&1 &'
 
 ssh -T ubuntu@e-vm1 << EOF
-    sudo nohup sysbench --threads=16 --time=20 cpu run >> pre_prober_sysbench.txt &
+    sudo nohup sysbench --threads=16 --time=20 cpu run > post_prober_sysbench.txt &
 EOF
 
 ssh -T ubuntu@e-vm1 'echo "$(date): Initialize competition and sysbench" >> prober_output.txt'
-ssh -T ubuntu@e-vm1 'sudo nohup sysbench --threads=16 --time=900000 cpu run >> pre_prober_sysbench.txt &'
+ssh -T ubuntu@e-vm1 'sudo nohup sysbench --threads=16 --time=900000 cpu run >> pre_prober_sysbench.txt &' &
 # Initialize competition on physical cores
 taskset -c 0-3 sysbench --threads=4 cpu run &
 taskset -c 4-7 sysbench --threads=4 cpu run &
