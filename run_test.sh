@@ -1,5 +1,6 @@
 #!/bin/bash
-
+source ~/.bashrc
+source ~/.bash_profile
 # Start a VM with 16 cores, treat the cores as four groups of four cores
 for i in {0..15}
 do
@@ -8,17 +9,14 @@ done
 
 # Start sysbench on all 16 vcpus for 3 minutes, running in the background
 ssh -T ubuntu@e-vm1 << EOF
-    nohup sysbench --threads=16 --time=180 cpu run > pre_prober_sysbench.txt &
+    sudo nohup sysbench --threads=16 --time=180 cpu run > pre_prober_sysbench.txt &
 EOF
 
 # Wait a bit for sysbench to start
 sleep 10
 
 # Start the prober
-ssh -T ubuntu@e-vm1 << EOF
-    echo "$(date): Starting prober" >> prober_output.txt
-    nohup sudo ./a.out -p 100 -s 1000 -v -i 20 >> prober_output.txt &
-EOF
+ssh -T ubuntu@e-vm1 'echo "$(date): Starting prober" >> prober_output.txt; nohup sudo ./a.out -p 100 -s 1000 -v -i 20 >> prober_output.txt 2>&1 &'
 
 # Initialize competition on physical cores
 taskset -c 0-3 sysbench --threads=4 cpu run &
