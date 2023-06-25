@@ -12,11 +12,15 @@ ssh -T ubuntu@e-vm1 << EOF
     sudo nohup sysbench --threads=16 --time=180 cpu run > pre_prober_sysbench.txt &
 EOF
 
-# Wait a bit for sysbench to start
-sleep 10
 
 # Start the prober
 ssh -T ubuntu@e-vm1 'echo "$(date): Starting prober" >> prober_output.txt; nohup sudo ./a.out -p 100 -s 1000 -v -i 20 >> prober_output.txt 2>&1 &'
+
+ssh -T ubuntu@e-vm1 << EOF
+    sudo nohup sysbench --threads=16 --time=180 cpu run > pre_prober_sysbench.txt &
+EOF
+
+ssh -T ubuntu@e-vm1 'echo "$(date): Initializ competition" >> prober_output.txt'
 
 # Initialize competition on physical cores
 taskset -c 0-3 sysbench --threads=4 cpu run &
@@ -28,7 +32,7 @@ taskset -c 4-7 sysbench --threads=4 cpu run &
 sleep 60
 
 ssh -T ubuntu@e-vm1  << EOF
-    echo "$(date): First minute of measurement finished" >> prober_output.txt
+    echo "$(date): First minute of measurement finished,moving fourth group" >> prober_output.txt
 EOF
 
 # Move the fourth group to an empty socket
