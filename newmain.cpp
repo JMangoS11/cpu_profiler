@@ -253,7 +253,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
       result_arr[i].preempts = preempts;
-      if(capacity_perc < 0.05){
+      if(result_arr[i].capacity_perc < 0.05){
         std::cout<<"Capacity Perc way below expected"<<profile_time<<"stolen"<<stolen_pass<<std::endl;
       }
       if (profiler_iter % heavy_profile_interval == 0){
