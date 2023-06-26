@@ -256,6 +256,10 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       if (profiler_iter % heavy_profile_interval == 0){
         double perf_use = thread_arg[i]->user_time;
         result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute * 1/result_arr[i].capacity_perc;
+        if(result_arr[i].capacity_adj>5000000){
+          std::cout<<"Ok, let's do this again. Perf Use : "<<perf_use<<" raw compute:"<<data_end[i].raw_compute<<" capacity perc"<<1/result_arr[i].capacity_perc;
+        }
+        
       }
       if(preempts == 0){
         if(stolen_pass != 0){
@@ -486,8 +490,8 @@ void* run_computation(void * arg)
         alertMainThread();
         while(!awake_workers_flag){
         }
-        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
         clock_gettime(CLOCK_MONOTONIC, &lstart);
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
         heavy_interval = true;
       }
       
