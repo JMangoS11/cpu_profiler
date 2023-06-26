@@ -23,10 +23,23 @@ EOF
 ssh -T ubuntu@e-vm1 'echo "$(date): Initialize competition and sysbench" >> prober_output.txt'
 ssh -T ubuntu@e-vm1 'sudo nohup sysbench --threads=16 --time=900000 cpu run >> pre_prober_sysbench.txt &' &
 # Initialize competition on physical cores
-taskset -c 0-3 sysbench --threads=4 --time=90 cpu run &
-taskset -c 4-7 sysbench --threads=4 --time=90 cpu run &
-taskset -c 4-7 sysbench --threads=4 --time=90 cpu run &
-taskset -c 4-7 sysbench --threads=4 --time=90 cpu run &
+#taskset -c 0-3 sysbench --threads=4 --time=90 cpu run &
+#taskset -c 4-7 sysbench --threads=1 --time=90 cpu run &
+#taskset -c 4-7 sysbench --threads=4 --time=90 cpu run &
+#taskset -c 4-7 sysbench --threads=4 --time=90 cpu run &
+
+for i in {0..3}; do
+  taskset -c $i sysbench cpu --threads=1 --time=10000 cpu run &
+done
+for i in {4..7}; do
+  taskset -c $i sysbench cpu --threads=1 --time=10000 cpu run &
+done
+for i in {4..7}; do
+  taskset -c $i sysbench cpu --threads=1 --time=10000 cpu run &
+done
+for i in {4..7}; do
+  taskset -c $i sysbench cpu --threads=1 --time=10000 cpu run &
+done
 
 # Wait a minute to let the prober measure
 sleep 60
