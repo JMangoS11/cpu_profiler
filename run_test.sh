@@ -1,6 +1,8 @@
 #!/bin/bash
 source ~/.bashrc
 source ~/.bash_profile
+
+echo 24000000 > sudo tee /sys/kernel/debug/sched/latency_ns
 # Start a VM with 16 cores, treat the cores as four groups of four cores
 for i in {0..15}
 do
@@ -62,7 +64,7 @@ ssh -T ubuntu@e-vm1 << EOF
 EOF
 
 # Change the target latency of the host system
-echo 48 | sudo tee /proc/sys/kernel/sched_min_granularity_ns
+echo 48000000 > sudo tee /sys/kernel/debug/sched/latency_ns
 
 # Wait for another minute to let the prober measure latency changes
 sleep 60

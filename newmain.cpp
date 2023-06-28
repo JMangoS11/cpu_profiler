@@ -24,7 +24,7 @@ typedef uint64_t u64;
 int num_threads = 4;
 int sleep_length = 1000;
 int profile_time = 100;
-
+double decay_length = 5;
 //this is for saving how many profiling periods have gone by, so far.
 int profiler_iter = 0;
 
@@ -190,7 +190,8 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<
   }
 }
 
-double calculate_ema(double decay_factor, double& ema_help, double prev_ema,double new_value) {
+double calculate_ema(double decay_len, double& ema_help, double prev_ema,double new_value) {
+  double decay_factor = pow(0.5,(1/decay_len))
   double newA = (1+decay_factor*ema_help);
   double result = (new_value + ((prev_ema)*ema_help*decay_factor))/newA;
   ema_help = newA;
@@ -223,6 +224,7 @@ void setArguments(const std::vector<std::string_view>& arguments) {
     
     set_option_value("-s", sleep_length);
     set_option_value("-p", profile_time);
+    set_option_value("-d", decay_length);
     set_option_value("-c", context_window);
     set_option_value("-i", heavy_profile_interval);
     num_threads = sysconf( _SC_NPROCESSORS_ONLN );
@@ -279,7 +281,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       addToHistory(result_arr[i].latency_hist,result_arr[i].latency);
       addToHistory(result_arr[i].preempts_hist,result_arr[i].preempts);
 
-      result_arr[i].capacity_perc_ema = calculate_ema(0.5,result_arr[i].capacity_perc_ema_a,result_arr[i].capacity_perc_ema,result_arr[i].capacity_perc);
+      result_arr[i].capacity_perc_ema = calculate_ema(decay_length,result_arr[i].capacity_perc_ema_a,result_arr[i].capacity_perc_ema,result_arr[i].capacity_perc);
       
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
     };
@@ -288,13 +290,14 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       }
 }
 
+
+
 void printResult(int cpunum,std::vector<profiled_data>& result,std::vector<thread_args*> thread_arg){
   for (int i = 0; i < cpunum; i++){
         std::cout <<"CPU:"<<i<<" TID:"<<thread_arg[i]->tid<<std::endl;
         std::cout<<"Capacity Perc:"<<result[i].capacity_perc<<" Latency:"<<result[i].latency<<" Preempts:"<<result[i].preempts<<" Capacity Raw:"<<result[i].capacity_adj<<std::endl;
         std::cout<<"Cperc stddev:"<<result[i].capacity_perc_stddev;
         std::cout <<" Cperc ema: "<<result[i].capacity_perc_ema <<std::endl<<std::endl;
-        
   }
   std::cout<<"--------------"<<std::endl;
 }
