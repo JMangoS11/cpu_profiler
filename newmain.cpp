@@ -24,7 +24,7 @@ typedef uint64_t u64;
 int num_threads = 4;
 int sleep_length = 1000;
 int profile_time = 100;
-double decay_length = 5;
+int decay_length = 5;
 //this is for saving how many profiling periods have gone by, so far.
 int profiler_iter = 0;
 
@@ -190,8 +190,8 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<
   }
 }
 
-double calculate_ema(double decay_len, double& ema_help, double prev_ema,double new_value) {
-  double decay_factor = pow(0.5,(1/decay_len));
+double calculate_ema(int decay_len, double& ema_help, double prev_ema,double new_value) {
+  double decay_factor = pow(0.5,(1/(double)decay_len));
   double newA = (1+decay_factor*ema_help);
   double result = (new_value + ((prev_ema)*ema_help*decay_factor))/newA;
   ema_help = newA;
