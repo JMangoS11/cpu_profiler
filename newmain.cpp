@@ -191,7 +191,7 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<
 }
 
 double calculate_ema(double decay_len, double& ema_help, double prev_ema,double new_value) {
-  double decay_factor = pow(0.5,(1/decay_len))
+  double decay_factor = pow(0.5,(1/decay_len));
   double newA = (1+decay_factor*ema_help);
   double result = (new_value + ((prev_ema)*ema_help*decay_factor))/newA;
   ema_help = newA;
