@@ -280,7 +280,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       addToHistory(result_arr[i].capacity_adj_hist,result_arr[i].capacity_adj);
       addToHistory(result_arr[i].latency_hist,result_arr[i].latency);
       addToHistory(result_arr[i].preempts_hist,result_arr[i].preempts);
-      result_arr[i].latency_ema = calculate_ema(decay_length,result_arr[i].latency_ema_a,result_arr[i].latnecy_ema,result_arr[i].latency);
+      result_arr[i].latency_ema = calculate_ema(decay_length,result_arr[i].latency_ema_a,result_arr[i].latency_ema,result_arr[i].latency);
       result_arr[i].capacity_perc_ema = calculate_ema(decay_length,result_arr[i].capacity_perc_ema_a,result_arr[i].capacity_perc_ema,result_arr[i].capacity_perc);
       result_arr[i].latency_ema = calculateStdDev(result_arr[i].latency_hist);
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
@@ -297,7 +297,7 @@ void printResult(int cpunum,std::vector<profiled_data>& result,std::vector<threa
         std::cout <<"CPU:"<<i<<" TID:"<<thread_arg[i]->tid<<std::endl;
         std::cout<<"Capacity Perc:"<<result[i].capacity_perc<<" Latency:"<<result[i].latency<<" Preempts:"<<result[i].preempts<<" Capacity Raw:"<<result[i].capacity_adj<<std::endl;
         std::cout<<"Cperc stddev:"<<result[i].capacity_perc_stddev;
-        std::cout <<" Cperc ema: "<<result[i].capacity_perc_ema<<" Latency EMA:"<<result[i].latency.latency_ema <<std::endl<<std::endl;
+        std::cout <<" Cperc ema: "<<result[i].capacity_perc_ema<<" Latency EMA:"<<result[i].latency_ema <<std::endl<<std::endl;
   }
   std::cout<<"--------------"<<std::endl;
 }
