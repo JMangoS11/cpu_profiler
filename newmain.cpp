@@ -56,6 +56,7 @@ struct raw_data {
   u64 preempts;
   u64 raw_compute;
   u64 use_time;
+  u64 max_latency;
 };
 
 
@@ -84,6 +85,7 @@ struct profiled_data{
   double capacity_perc;
   double capacity_adj;
   double latency;
+  double max_latency;
 };
 
 
@@ -202,6 +204,7 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<
   std::string s;
   u64 preempts;
   u64 steals;
+  u64 max_latency;
   for (int i = 0; i < cpunum; i++) {
     std::getline(f,s);
     std::getline(f,s);
@@ -210,7 +213,24 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<
     data_arr[i].steal_time = std::stoull(s);
 
   }
+  std::ifstream laten("/proc/max_latency");
+  for (int i = 0; i < cpunum; i++) {
+    std::getline(laten,s);
+    std::getline(laten,s);
+    data_arr[i].max_latency = std::stoull(s);
+  }
 }
+
+void reset_max_latency(){
+  fstream write_file;
+  write_file.open("/proc/max_latency", ios::out);
+  write_file<<"0";
+  write_file.close();
+  return 0;
+}
+
+
+
 
 
 
@@ -299,7 +319,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       } else {
         result_arr[i].latency = stolen_pass/preempts; 
       }
-
+      result_arr[i].max_latency = data_end[i].max_latency;
       addToHistory(result_arr[i].capacity_perc_hist,result_arr[i].capacity_perc);
       addToHistory(result_arr[i].capacity_adj_hist,result_arr[i].capacity_adj);
       addToHistory(result_arr[i].latency_hist,result_arr[i].latency);
@@ -318,7 +338,7 @@ void printResult(int cpunum,std::vector<profiled_data>& result,std::vector<threa
   for (int i = 0; i < cpunum; i++){
         std::cout <<"CPU:"<<i<<" TID:"<<thread_arg[i]->tid<<std::endl;
         std::cout<<"Capacity Perc:"<<result[i].capacity_perc<<" Latency:"<<result[i].latency<<" Preempts:"<<result[i].preempts<<" Capacity Raw:"<<result[i].capacity_adj<<std::endl;
-        std::cout<<"Cperc stddev:"<<result[i].capacity_perc_stddev;
+        std::cout<<"Cperc stddev:"<<result[i].capacity_perc_stddev<<"Max latency:"<<result[i].max_latency;
         std::cout <<" Cperc ema: "<<result[i].capacity_perc_ema <<std::endl<<std::endl;
         
   }
@@ -351,6 +371,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       }
       endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
       get_cpu_information(num_threads,data_begin,thread_arg);
+      reset_max_latency();
       //Wait for processors to finish profiling
       //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
 
