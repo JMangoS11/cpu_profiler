@@ -203,7 +203,6 @@ void reset_max_latency(){
   std::fstream write_file;
   write_file.open("/proc/max_latency", std::ios::out);
   write_file<<"0";
-  return 0;
   write_file.close();
 }
 
