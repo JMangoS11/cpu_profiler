@@ -206,7 +206,6 @@ void reset_max_latency(){
   write_file.close();
 }
 
-  double decay_factor = pow(0.5,(1/(double)decay_len));
 double calculate_ema(int decay_len, double& ema_help, double prev_ema,double new_value) {
   double decay_factor = pow(0.5,(1/(double)decay_len));
   double newA = (1+decay_factor*ema_help);
