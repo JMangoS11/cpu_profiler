@@ -24,7 +24,7 @@ typedef uint64_t u64;
 int num_threads = 4;
 int sleep_length = 1000;
 int profile_time = 100;
-
+int decay_length = 5;
 //this is for saving how many profiling periods have gone by, so far.
 int profiler_iter = 0;
 
@@ -33,13 +33,14 @@ int heavy_profile_interval = 5;
 int context_window = 5;
 double milliseconds_totick_factor = static_cast<double>(sysconf(_SC_CLK_TCK))/1000.0;
 bool verbose = false;
-bool bigtest = false;
+bool awake_workers_flag = false;
 int initialized = 0;
 std::chrono::time_point<std::chrono::_V2::system_clock, std::chrono::_V2::system_clock::duration> endtime;
 void* run_computation(void * arg);
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
-
-
+pthread_cond_t cv1 = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t ready_check = PTHREAD_MUTEX_INITIALIZER;
+int ready_counter = 0;
 //Arguments for each thread
 struct thread_args {
   int id;
@@ -104,27 +105,6 @@ double calculateStdDev(const std::deque<double>& v) {
     return stdDev;
 }
 
-u64 getThreadCpuTime(pid_t tid) {
-    std::ifstream stat_file("/proc/self/task/" + std::to_string(tid) + "/stat");
-    if (!stat_file) {
-        std::cerr << "Could not open stat file for thread " << tid << std::endl;
-        return -1;
-    }
-
-    // Skip the first 13 fields
-    std::string tmp;
-    for (int i = 0; i < 13; ++i) {
-        stat_file >> tmp;
-    }
-
-    u64 utime, stime;
-    if (!(stat_file >> utime >> stime)) {
-        std::cerr << "Could not read utime and stime for thread " << tid << std::endl;
-        return -1;
-    }
-
-    return utime + stime;
-}
 
 std::string_view get_option(
     const std::vector<std::string_view>& args, 
@@ -137,6 +117,7 @@ std::string_view get_option(
     
     return "";
 };
+
 
 bool has_option(
     const std::vector<std::string_view>& args, 
@@ -178,10 +159,10 @@ void moveThreadtoHighPrio(pid_t tid) {
     ofs.close();
 }
 
+
 void moveCurrentThread() {
     pid_t tid;
     tid = syscall(SYS_gettid);
-    
     std::string path = "/sys/fs/cgroup/cgroup.procs";
     std::ofstream ofs(path, std::ios_base::app);
     if (!ofs) {
@@ -195,9 +176,6 @@ void moveCurrentThread() {
     sched_setscheduler(tid,SCHED_RR,&params);
 }
 
-u64 timespec_to_ns(struct timespec* ts) {
-    return ((uint64_t) ts->tv_sec * 1000000000ULL) + (uint64_t) ts->tv_nsec;
-}
 
 void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<thread_args*> thread_arg){
   std::ifstream f("/proc/preempts");
@@ -225,16 +203,13 @@ void reset_max_latency(){
   fstream write_file;
   write_file.open("/proc/max_latency", ios::out);
   write_file<<"0";
-  write_file.close();
   return 0;
+  write_file.close();
 }
 
-
-
-
-
-
-double calculate_ema(double decay_factor, double& ema_help, double prev_ema,double new_value) {
+  double decay_factor = pow(0.5,(1/(double)decay_len));
+double calculate_ema(int decay_len, double& ema_help, double prev_ema,double new_value) {
+  double decay_factor = pow(0.5,(1/(double)decay_len));
   double newA = (1+decay_factor*ema_help);
   double result = (new_value + ((prev_ema)*ema_help*decay_factor))/newA;
   ema_help = newA;
@@ -267,6 +242,7 @@ void setArguments(const std::vector<std::string_view>& arguments) {
     
     set_option_value("-s", sleep_length);
     set_option_value("-p", profile_time);
+    set_option_value("-d", decay_length);
     set_option_value("-c", context_window);
     set_option_value("-i", heavy_profile_interval);
     num_threads = sysconf( _SC_NPROCESSORS_ONLN );
@@ -295,21 +271,19 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
-      if(preempts == 0){
-        std::cout<<"something went wrong"<<profile_time<<"Idk "<<data_begin[i].preempts<<" stl"<<data_begin[i].steal_time<<" aa"<<data_end[i].steal_time;
-      }
       result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
+      result_arr[i].preempts = preempts;
+      if(result_arr[i].capacity_perc < 0.05){
+        std::cout<<"Capacity Perc way below expected"<<profile_time<<"stolen"<<stolen_pass<<std::endl;
+      }
       if (profiler_iter % heavy_profile_interval == 0){
         double perf_use = thread_arg[i]->user_time;
-        std::cout<<"use time"<<perf_use;
-
         result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute * 1/result_arr[i].capacity_perc;
-        if(result_arr[i].capacity_adj<1000000){
-          std::cout<<"LISTEN UP"<<data_end[i].raw_compute<<"WHAAAA "<<(1/perf_use)<<std::endl;
+        if(result_arr[i].capacity_adj>5000000){
+          std::cout<<"Ok, let's do this again. Perf Use : "<<perf_use<<" raw compute:"<<data_end[i].raw_compute<<" capacity perc"<<1/result_arr[i].capacity_perc;
         }
+        
       }
-
-      result_arr[i].preempts = preempts;
       if(preempts == 0){
         if(stolen_pass != 0){
           std::cout<< "incompatible steal/preempt"<<std::endl;
@@ -324,15 +298,17 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       addToHistory(result_arr[i].capacity_adj_hist,result_arr[i].capacity_adj);
       addToHistory(result_arr[i].latency_hist,result_arr[i].latency);
       addToHistory(result_arr[i].preempts_hist,result_arr[i].preempts);
-
-      result_arr[i].capacity_perc_ema = calculate_ema(0.5,result_arr[i].capacity_perc_ema_a,result_arr[i].capacity_perc_ema,result_arr[i].capacity_perc);
-      
+      result_arr[i].latency_ema = calculate_ema(decay_length,result_arr[i].latency_ema_a,result_arr[i].latency_ema,result_arr[i].latency);
+      result_arr[i].capacity_perc_ema = calculate_ema(decay_length,result_arr[i].capacity_perc_ema_a,result_arr[i].capacity_perc_ema,result_arr[i].capacity_perc);
+      result_arr[i].latency_ema = calculateStdDev(result_arr[i].latency_hist);
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
     };
     if (profiler_iter % heavy_profile_interval == 0){
         //process_values(result_arr);
       }
 }
+
+
 
 void printResult(int cpunum,std::vector<profiled_data>& result,std::vector<thread_args*> thread_arg){
   for (int i = 0; i < cpunum; i++){
@@ -345,53 +321,76 @@ void printResult(int cpunum,std::vector<profiled_data>& result,std::vector<threa
   std::cout<<"--------------"<<std::endl;
 }
 
+void waitforWorkers(){
+  pthread_mutex_lock(&ready_check);
+  while(ready_counter != num_threads){
+    pthread_cond_wait(&cv1, &ready_check);
+  }
+  pthread_mutex_unlock(&ready_check);
+  ready_counter = 0;
+}
+
 void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread_arg){
 
     std::vector<raw_data> data_begin(num_threads);
     std::vector<profiled_data> result_arr(num_threads);
 
     while(true){
-      //sleep for sleep_length
-      std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
 
-      //Set time where threads stop
-      endtime = high_resolution_clock::now() + std::chrono::milliseconds(1000000000);
+      //If the last interval was heavy, move the threads to low priority.
       if ((profiler_iter-1) % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
           moveThreadtoLowPrio(thread_arg[i]->tid);
         }
       }
+      
+      //sleep during sleep
+      std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
 
+      //We want to set the endtime and get data immediately after the threads have woken up in order to minimize innacuracy, this is to keep threads waiting
+      endtime = high_resolution_clock::now() + std::chrono::milliseconds(1000000000);
+
+      //this is for the heavy profile period
+      awake_workers_flag=false;
+      
       //wake up threads and broadcast 
       initialized = 1;
       pthread_cond_broadcast(&cv);
+
+      //if it's a heavy profile period wait for the workers to wake up
       if((profiler_iter) % heavy_profile_interval == 0){
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        bigtest=true;
+        waitforWorkers();
+        awake_workers_flag=true;
       }
+
+      //set the endtime and get data
       endtime = high_resolution_clock::now() + std::chrono::milliseconds(profile_time);
       get_cpu_information(num_threads,data_begin,thread_arg);
-      reset_max_latency();
-      //Wait for processors to finish profiling
       //TODO-sleep every x ms and wake up to see if it's now(potentially)try nano sleep? (do some testing)
+      //Wait for processors to finish profiling
+      reset_max_latency();
 
+      //sleep during profiling
       std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
-    
-      get_cpu_information(num_threads,data_end,thread_arg);
-	double test = (profile_time 
-+ static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())
-- static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(endtime.time_since_epoch()).count()));
 
+      //wait for everybody to finish reporting data
       if ((profiler_iter) % heavy_profile_interval == 0){
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        waitforWorkers();
       }
+      
+      get_cpu_information(num_threads,data_end,thread_arg);
+      //get actual profiling period
+      double test = (profile_time 
+        + static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())
+        - static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(endtime.time_since_epoch()).count()));
       getFinalizedData(num_threads,test,data_begin,data_end,result_arr,thread_arg);
+       //If the next interval is heavy, move the threads to high priority.
       if ((profiler_iter+1) % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
           moveThreadtoHighPrio(thread_arg[i]->tid);
         }
       }
-      bigtest=false;
+      
       profiler_iter++;
       if(verbose){
         printResult(num_threads,result_arr,thread_arg);
@@ -488,6 +487,15 @@ u64 timespec_diff_to_ns(struct timespec *start, struct timespec *end) {
     return end_ns - start_ns;
 }
 
+
+
+void alertMainThread(){
+  pthread_mutex_lock(&ready_check);
+  ready_counter += 1;
+  pthread_mutex_unlock(&ready_check);
+  pthread_cond_signal(&cv1);
+}
+
 void* run_computation(void * arg)
 {
     //TODO-Learn how to use kernel shark to visualize whole process
@@ -498,7 +506,7 @@ void* run_computation(void * arg)
       struct timespec start,end,lstart,lend;
       //here to avoid a race condition
       bool heavy_interval = false;
-      bool test_interval = false;
+
       pthread_mutex_lock(&args->mutex);
       while (! initialized) {
         pthread_cond_wait(&cv, &args->mutex);
@@ -507,12 +515,14 @@ void* run_computation(void * arg)
       
       int addition_calculator = 0;
       if (profiler_iter % heavy_profile_interval == 0){
-        while(!bigtest){
-        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
-        clock_gettime(CLOCK_MONOTONIC, &lstart);
-        heavy_interval = true;
+        alertMainThread();
+        while(!awake_workers_flag){
         }
+        clock_gettime(CLOCK_MONOTONIC, &lstart);
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
+        heavy_interval = true;
       }
+      
       while(((std::chrono::high_resolution_clock::now() < endtime))) {
         addition_calculator += 1;
       };
@@ -520,23 +530,13 @@ void* run_computation(void * arg)
       if(heavy_interval){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
         clock_gettime(CLOCK_MONOTONIC, &lend);
-        
+
         double test = static_cast<double>(timespec_diff_to_ns(&start, &end)) /static_cast<double>(timespec_diff_to_ns(&lstart, &lend));
-        
-      if(addition_calculator<1000000){
-        std::cout<<"Clock CPUTIME:"<< timespec_diff_to_ns(&start, &end) <<" Clock Monotonic"<<static_cast<double>(timespec_diff_to_ns(&lstart, &lend))<<
-        " Profile Calc"<<(profile_time * 1e6 
-+ static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
-- static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()))<<" Additions"<<addition_calculator<<std::endl;
-      }
-        if(test>1){
-          std::cout<<"duration longer then top"<< timespec_diff_to_ns(&start, &end) <<" WHAT"<<(profile_time * 1e6  
-+ static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count()) 
-  - static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()))<<"EH?"<<addition_calculator<<std::endl;
-        }
+
         args->user_time = test;
+        alertMainThread();
+
         }
-      
       initialized = 0;
       }
       return NULL;
