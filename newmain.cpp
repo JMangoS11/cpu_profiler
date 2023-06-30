@@ -200,8 +200,8 @@ void get_cpu_information(int cpunum,std::vector<raw_data>& data_arr,std::vector<
 }
 
 void reset_max_latency(){
-  fstream write_file;
-  write_file.open("/proc/max_latency", ios::out);
+  std::fstream write_file;
+  write_file.open("/proc/max_latency", std::ios::out);
   write_file<<"0";
   return 0;
   write_file.close();
