@@ -49,7 +49,7 @@ ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): Third Minute of Measurement Finished, Two Thirds Competition Initialized" >> ${output_title}
 EOF
 
-ssh -T ubuntu@e-vm1 "sudo killall a.out"
-ssh -T ubuntu@e-vm1 "nohup sudo ./a.out -p 450 -s 150 -i 1 &" &
+ssh -T ubuntu@e-vm3 "sudo killall a.out"
+ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 450 -s 150 -i 1 &" &
 
 sleep 60
