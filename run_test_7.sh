@@ -11,7 +11,7 @@ done
 
 for i in {0..15}
 do
-    virsh vcpupin e-vm2 $i $i
+    virsh vcpupin e-vm3 $i $i
 done
 
 
@@ -33,15 +33,15 @@ ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): First Minute of Measurement Finished,One Third Competition Intialized  >> ${output_title}
 EOF
 
-ssh -T ubuntu@e-vm2 "nohup sudo ./a.out -p 150 -s 450 -i 1 &" &
+ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 150 -s 450 -i 1 &" &
 
 sleep 60
 ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): Second Minute of Measurement Fished, Half Competition Initialized" >> ${output_title}
 EOF
 
-ssh -T ubuntu@e-vm2 "sudo killall a.out"
-ssh -T ubuntu@e-vm2 "nohup sudo ./a.out -p 250 -s 250 -i 1 &" &
+ssh -T ubuntu@e-vm3 "sudo killall a.out"
+ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 250 -s 250 -i 1 &" &
 sleep 60
 
 ssh -T ubuntu@e-vm1  << EOF
