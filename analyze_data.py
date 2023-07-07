@@ -1,35 +1,55 @@
 import pandas as pd
-f = open('prober_output.txt', 'r')
-data = f.read()
-lines = data.strip().split('\n')
+from collections import defaultdict
 
-# Initialize an empty list to store the parsed data
-parsed_data = []
+# Open and read the file
+with open('6prober_output_071148.txt', 'r') as f:
+    lines = f.readlines()
+
+# Initialize a dictionary to store the parsed data
+parsed_data = defaultdict(lambda: defaultdict(list))
 
 current_cpu = None
 
 for line in lines:
+    # Identify CPU lines and parse the CPU
     if line.startswith('CPU:'):
-        current_cpu = line.split()[0]
-    elif line.startswith('Wed'):
+        current_cpu = line.split(" ")[0].split(":")[1]
+    # Ignore lines starting with 'Fri' or '---', or too short lines
+    elif line.startswith('Fri') or len(line)<3 or line.startswith('---'):
         print('start')
+    # For other lines, parse values and add to the dictionary
     else:
-        print(line)
-        values = line.split(':')
+        # remove any leading colon from line
+        if(line[0]==":"):
+            line = line[1:]
+        values = line.split(':') 
+        for i in range(0, len(values), 2):
+            # Get the label (e.g., 'Capacity Perc') and the value
+            label, value = values[i], float(values[i+1])
+            
+            # Append the value to the appropriate list
+            parsed_data[label][current_cpu].append(value)
+
+# Convert the dictionary to a DataFrame
+df = pd.DataFrame({key: pd.Series(val) for key, val in parsed_data.items()})
+
+print(df)
+
+import matplotlib.pyplot as plt
+
+# For each label...
+for label, cpu_dict in parsed_data.items():
+    # Create a new figure
+    plt.figure(figsize=(10, 6))
+    # For each CPU...
+    for cpu, values in cpu_dict.items():
+        # Plot the data
         print(values)
-
-# Create a pandas DataFrame from the parsed data
-df = pd.DataFrame(parsed_data, columns=['CPU', 'Label', 'Value'])
-
-# Pivot the table to have 'Label' as columns and 'CPU' as index
-df_pivot = df.pivot(index='CPU', columns='Label', values='Value')
-
-# Reorder the columns if necessary
-desired_columns = [
-    'Capacity Perc', 'Latency', 'Preempts', 'Capacity Raw',
-    'Cperc stddev', 'Cperc ema', 'Latency EMA'
-]
-df_pivot = df_pivot[desired_columns]
-
-# Print the DataFrame
-print(df_pivot)
+        plt.plot(values, label=cpu)
+    # Add a legend, title, and labels
+    plt.legend()
+    plt.title(label)
+    plt.xlabel('Time step')
+    plt.ylabel('Value')
+    # Show the plot
+    plt.show()
