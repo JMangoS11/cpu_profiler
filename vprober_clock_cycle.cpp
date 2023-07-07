@@ -25,8 +25,8 @@ int num_threads = 4;
 int sleep_length = 1000;
 int profile_time = 100;
 int decay_length = 5;
-//this is for saving how many profiling periods have gone by, so far.
-int profiler_iter = 0;
+//this is for saving how many profiling periods have gone by, so far. Offset by 1 because we want capacity measurement to start on next cycle
+int profiler_iter = -1;
 
 //this decides how many regular profile intervals go by before a "heavy" profile happens, where we try to get the actual capacity of the core
 int heavy_profile_interval = 5;
@@ -335,8 +335,8 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
 
     while(true){
 
-      //If the last interval was heavy, move the threads to low priority.
-      if ((profiler_iter-1) % heavy_profile_interval == 0){
+      //If the last interval was heavy, move the threads to low priority. If interval is less then 2, obviously special workload. 
+      if ((!heavy_profile_interval < 2) && ((profiler_iter-1) % heavy_profile_interval == 0)){
         for (int i = 0; i < num_threads; i++) {
           moveThreadtoLowPrio(thread_arg[i]->tid);
         }

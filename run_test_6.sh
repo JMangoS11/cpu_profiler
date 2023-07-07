@@ -2,7 +2,7 @@
 source ~/.bashrc
 source ~/.bash_profile
 
-echo 24000000 > sudo tee /sys/kernel/debug/sched/latency_ns
+sudo echo 3000000 > /sys/kernel/debug/sched/min_granularity_ns
 # Start a VM with 16 cores, treat the cores as four groups of four cores
 for i in {0..15}
 do
@@ -18,58 +18,39 @@ done
 
 
 
-
-
 # Start the prober
-ssh -T ubuntu@e-vm1 'echo "$(date): Starting prober" >> prober_output.txt; nohup sudo ./a.out -p 100 -s 1000 -v -i 20 >> prober_output.txt 2>&1 &'
+output_title="/cpu_profiler/test_logs/6prober_output_$(date +%d%H%M).txt"
+# Start the prober
+ssh -T ubuntu@e-vm1 "output_file=$output_title; echo \"\$(date): Beginning test 6:Dynamic InVCPU testing\" >> \"\$output_file\";nohup sudo ./a.out -p 50 -s 2000 -v -i 20 -d 1 >> \"\$output_file\" 2>&1 &"
 
+ssh -T ubuntu@e-vm1 "echo '$(date): Initialize competition and sysbench' >> ${output_title}"
+ssh -T ubuntu@e-vm2 'nohup sysbench --threads=16 --time=900000 cpu run &' &
 
-
-ssh -T ubuntu@e-vm1 'echo "$(date): Initialize competition and sysbench" >> prober_output.txt'
-ssh -T ubuntu@e-vm1 'nohup sudo ./a.out -p 100 -s 1000 -i 1' &
-ssh -T ubuntu@e-vm2 'sudo nohup sysbench --threads=16 --time=900000 cpu run >> pre_prober_sysbench.txt &' &
-
-# Initialize competition on physical cores
-#taskset -c 0-3 sysbench --threads=4 --time=90 cpu run &
-#taskset -c 4-7 sysbench --threads=1 --time=90 cpu run &
-#taskset -c 4-7 sysbench --threads=4 --time=90 cpu run &
-#taskset -c 4-7 sysbench --threads=4 --time=90 cpu run &
 
 # Wait a minute to let the prober measure
 sleep 60
 
+
 ssh -T ubuntu@e-vm1  << EOF
-    echo "$(date): First minute of measurement finished,moving fourth group" >> prober_output.txt
+    echo "$(date): First Minute of Measurement Finished, generating workload at 20%" >> ${output_title}
 EOF
 
-# Move the fourth group to an empty socket
-for i in {12..15}
-do
-    virsh vcpupin e-vm1 $i $((i + 16))
-done
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 250 -s 750 -i 20 &"
 
-# Wait a minute for prober to measure the new configuration
+sleep 60
+ssh -T ubuntu@e-vm1  << EOF
+    echo "$(date): Second Minute of Measurement Finished, generating workload at 40%" >> ${output_title}
+EOF
+
+ssh -T ubuntu@e-vm1 "sudo killall work.out"
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 400 -s 600 -i 20 &"
 sleep 60
 
-ssh -T ubuntu@e-vm1 << EOF
-    echo "$(date): Second minute of measurement finished, after moving the fourth group" >> prober_output.txt
+ssh -T ubuntu@e-vm1  << EOF
+    echo "$(date): Third Minute of Measurement Finished, generating workload at 80%" >> ${output_title}
 EOF
 
-# Change the target latency of the host system
-echo 48000000 > sudo tee /sys/kernel/debug/sched/latency_ns
 
-# Wait for another minute to let the prober measure latency changes
+ssh -T ubuntu@e-vm1 "sudo killall work.out"
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 800 -s 200 -i 20 &"
 sleep 60
-
-ssh -T ubuntu@e-vm1 << EOF
-    echo "$(date): Third minute of measurement finished, after changing target latency" >> prober_output.txt
-EOF
-
-# Stop the prober
-ssh -T ubuntu@e-vm1 << EOF
-    sudo pkill -f './a.out -p 100 -s 1000 -v -i 20'
-EOF
-
-# Collect the output files from the VM
-scp e-vm1:/path/to/pre_prober_sysbench.txt /local/path/on/host/
-scp e-vm1:/path/to/prober_output.txt /local/path/on/host/
