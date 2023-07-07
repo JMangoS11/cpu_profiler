@@ -35,7 +35,7 @@ ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): First Minute of Measurement Finished, generating workload at 20%" >> ${output_title}
 EOF
 
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 100 -s 400 -i 1 &" &
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 100 -s 400 -i 50 &" &
 
 sleep 60
 
@@ -44,7 +44,7 @@ ssh -T ubuntu@e-vm1  << EOF
 EOF
 
 ssh -T ubuntu@e-vm1 "sudo killall work.out" &
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 160 -s 240  -i 1 &" &
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 160 -s 240  -i 50 &" &
 sleep 60
 
 ssh -T ubuntu@e-vm1  << EOF
@@ -53,7 +53,19 @@ EOF
 
 
 ssh -T ubuntu@e-vm1 "sudo killall work.out" &
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 320 -s 80 -i 1 &" &
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 320 -s 80 -i 50 &" &
+
+
+sleep 60
+
+
+ssh -T ubuntu@e-vm1  << EOF
+    echo "$(date): Fourth Minute of Measurement Finished, generating workload at 100%" >> ${output_title}
+EOF
+
+
+ssh -T ubuntu@e-vm1 "sudo killall work.out" &
+ssh -T ubuntu@e-vm2 'nohup sysbench --threads=16 --time=900000 cpu run &' &
 
 
 sleep 60
