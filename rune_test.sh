@@ -32,7 +32,7 @@ EOF
 
 
 # Start the prober
-output_title="prober_output_$(date +%d%H%M).txt"
+output_title="/cpu_profiler/test_logs/prober_output_$(date +%d%H%M).txt"
 # Start the prober
 ssh -T ubuntu@e-vm1 "output_file=$output_title; echo \"\$(date): Starting prober\" >> \"\$output_file\";nohup sudo ./a.out -p 100 -s 1000 -v -i 20 >> \"\$output_file\" 2>&1 &"
 
@@ -98,5 +98,5 @@ ssh -T ubuntu@e-vm2 << EOF
 EOF
 
 # Collect the output files from the VM
-scp e-vm1:/path/to/pre_prober_sysbench.txt /local/path/on/host/
-scp e-vm1:/path/to/prober_output.txt /local/path/on/host/
+scp ubuntu@e-vm1:/path/to/pre_prober_sysbench.txt /home
+scp ubuntu@e-vm1:/path/to/prober_output.txt /home
