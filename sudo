@@ -1,0 +1,1 @@
+24000000 tee /sys/kernel/debug/sched/latency_ns
