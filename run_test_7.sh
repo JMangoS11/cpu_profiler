@@ -11,7 +11,8 @@ done
 
 for i in {0..15}
 do
-    virsh vcpupin e-vm3 $i $i
+    pinned_core=$(( i%4 ))
+    virsh vcpupin e-vm3 $i $pinned_core
 done
 
 
