@@ -276,7 +276,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       }
       if (profiler_iter % heavy_profile_interval == 0){
         double perf_use = thread_arg[i]->user_time;
-        result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute * 1/result_arr[i].capacity_perc;
+        result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute;
         if(result_arr[i].capacity_adj>5000000){
           std::cout<<"Ok, let's do this again. Perf Use : "<<perf_use<<" raw compute:"<<data_end[i].raw_compute<<" capacity perc"<<1/result_arr[i].capacity_perc;
         }
@@ -516,7 +516,7 @@ void* run_computation(void * arg)
         alertMainThread();
         while(!awake_workers_flag){
         }
-        clock_gettime(CLOCK_MONOTONIC, &lstart);
+        clock_gettime(CLOCK_MONOTONIC_RAW, &lstart);
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
         heavy_interval = true;
       }
@@ -527,7 +527,7 @@ void* run_computation(void * arg)
       *args->addition_calc = addition_calculator;
       if(heavy_interval){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
-        clock_gettime(CLOCK_MONOTONIC, &lend);
+        clock_gettime(CLOCK_MONOTONIC_RAW, &lend);
 
         double test = static_cast<double>(timespec_diff_to_ns(&start, &end)) /static_cast<double>(timespec_diff_to_ns(&lstart, &lend));
 
