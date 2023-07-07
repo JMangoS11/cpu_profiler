@@ -21,30 +21,31 @@ done
 # Start the prober
 output_title="6prober_output_$(date +%d%H%M).txt"
 # Start the prober
-ssh -T ubuntu@e-vm1 "output_file=$output_title; echo \"\$(date): Beginning test 6:Dynamic InVCPU testing\" >> \"\$output_file\";nohup sudo ./a.out -p 50 -s 2000 -v -i 20 -d 1 >> \"\$output_file\" 2>&1 &"
+ssh -T ubuntu@e-vm1 "output_file=$output_title; echo \"\$(date): Beginning test 6:Dynamic InVCPU testing\" >> \"\$output_file\";nohup sudo ./a.out -p 100 -s 2000 -v -i 20 -d 2 >> \"\$output_file\" 2>&1 &"
 
 ssh -T ubuntu@e-vm1 "echo '$(date): Initialize competition and sysbench' >> ${output_title}"
 ssh -T ubuntu@e-vm2 'nohup sysbench --threads=16 --time=900000 cpu run &' &
 
 
 # Wait a minute to let the prober measure
-sleep 30
+sleep 60
 
 
 ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): First Minute of Measurement Finished, generating workload at 20%" >> ${output_title}
 EOF
 
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 250 -s 750 -i 1 &" &
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 100 -s 400 -i 1 &" &
 
-sleep 30
+sleep 60
+
 ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): Second Minute of Measurement Finished, generating workload at 40%" >> ${output_title}
 EOF
 
 ssh -T ubuntu@e-vm1 "sudo killall work.out" &
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 400 -s 600 -i 1 &" &
-sleep 30
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 160 -s 240  -i 1 &" &
+sleep 60
 
 ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): Third Minute of Measurement Finished, generating workload at 80%" >> ${output_title}
@@ -52,7 +53,7 @@ EOF
 
 
 ssh -T ubuntu@e-vm1 "sudo killall work.out" &
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 800 -s 200 -i 1 &" &
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 320 -s 80 -i 1 &" &
 
 
-sleep 30
+sleep 60
