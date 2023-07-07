@@ -281,10 +281,6 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
         
       }
       if(preempts == 0){
-        if(stolen_pass != 0){
-          std::cout<< "incompatible steal/preempt"<<std::endl;
-          return;
-        }
         result_arr[i].latency = 0;
       } else {
         result_arr[i].latency = stolen_pass/preempts; 
