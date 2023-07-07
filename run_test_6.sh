@@ -28,23 +28,23 @@ ssh -T ubuntu@e-vm2 'nohup sysbench --threads=16 --time=900000 cpu run &' &
 
 
 # Wait a minute to let the prober measure
-sleep 60
+sleep 30
 
 
 ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): First Minute of Measurement Finished, generating workload at 20%" >> ${output_title}
 EOF
 
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 250 -s 750 -i 20 &" &
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 250 -s 750 -i 1 &" &
 
-sleep 60
+sleep 30
 ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): Second Minute of Measurement Finished, generating workload at 40%" >> ${output_title}
 EOF
 
 ssh -T ubuntu@e-vm1 "sudo killall work.out" &
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 400 -s 600 -i 20 &" &
-sleep 60
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 400 -s 600 -i 1 &" &
+sleep 30
 
 ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): Third Minute of Measurement Finished, generating workload at 80%" >> ${output_title}
@@ -52,5 +52,7 @@ EOF
 
 
 ssh -T ubuntu@e-vm1 "sudo killall work.out" &
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 800 -s 200 -i 20 &" &
-sleep 60
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 800 -s 200 -i 1 &" &
+
+
+sleep 30
