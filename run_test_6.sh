@@ -35,7 +35,7 @@ ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): First Minute of Measurement Finished, generating workload at 20%" >> ${output_title}
 EOF
 
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 20 -s 80 -i 50 &" &
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 20 -s 80 -i 10000 &" &
 
 sleep 60
 
@@ -44,7 +44,7 @@ ssh -T ubuntu@e-vm1  << EOF
 EOF
 
 ssh -T ubuntu@e-vm1 "sudo killall work.out" &
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 40 -s 60  -i 50 &" &
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 40 -s 60  -i 1000000 &" &
 sleep 60
 
 ssh -T ubuntu@e-vm1  << EOF
@@ -53,7 +53,7 @@ EOF
 
 
 ssh -T ubuntu@e-vm1 "sudo killall work.out" &
-ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 80 -s 20 -i 50 &" &
+ssh -T ubuntu@e-vm1 "nohup sudo ./work.out -p 80 -s 20 -i 1000000 &" &
 
 
 sleep 60

@@ -19,11 +19,11 @@ done
 
 
 # Start the prober
-output_title="/cpu_profiler/test_logs/7prober_output_$(date +%d%H%M).txt"
+output_title="7prober_output_$(date +%d%H%M).txt"
 # Start the prober
-ssh -T ubuntu@e-vm1 "output_file=$output_title; echo \"\$(date): Beginning test 6:Dynamic OutVCPU testing\" >> \"\$output_file\";nohup sudo ./a.out -p 100 -s 1000 -v -i 20 -d 1 >> \"\$output_file\" 2>&1 &"
+ssh -T ubuntu@e-vm1 "output_file=$output_title; echo \"\$(date): Beginning test 6:Dynamic OutVCPU testing\" >> \"\$output_file\";nohup sudo ./a.out -p 100 -s 1000 -v -i 20 -d 2 >> \"\$output_file\" 2>&1 &" &
 
-ssh -T ubuntu@e-vm1 "echo '$(date): Initialize competition and sysbench' >> ${output_title}"
+
 
 # Wait a minute to let the prober measure
 sleep 10
@@ -33,7 +33,7 @@ ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): First Minute of Measurement Finished,One Third Competition Intialized  >> ${output_title}
 EOF
 
-ssh -T ubuntu@e-vm2 "nohup sudo ./a.out -p 50 -s 100 -i 1 &"
+ssh -T ubuntu@e-vm2 "nohup sudo ./a.out -p 150 -s 450 -i 1 &" &
 
 sleep 60
 ssh -T ubuntu@e-vm1  << EOF
@@ -41,7 +41,7 @@ ssh -T ubuntu@e-vm1  << EOF
 EOF
 
 ssh -T ubuntu@e-vm2 "sudo killall a.out"
-ssh -T ubuntu@e-vm2 "nohup sudo ./a.out -p 75 -s 75 -i 1 &"
+ssh -T ubuntu@e-vm2 "nohup sudo ./a.out -p 250 -s 250 -i 1 &" &
 sleep 60
 
 ssh -T ubuntu@e-vm1  << EOF
@@ -49,6 +49,6 @@ ssh -T ubuntu@e-vm1  << EOF
 EOF
 
 ssh -T ubuntu@e-vm1 "sudo killall a.out"
-ssh -T ubuntu@e-vm1 "nohup sudo ./a.out -p 100 -s 25 -i 1 &"
+ssh -T ubuntu@e-vm1 "nohup sudo ./a.out -p 450 -s 150 -i 1 &" &
 
 sleep 60
