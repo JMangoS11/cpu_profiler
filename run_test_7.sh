@@ -22,7 +22,7 @@ done
 # Start the prober
 output_title="7prober_output_$(date +%d%H%M).txt"
 # Start the prober
-ssh -T ubuntu@e-vm1 "output_file=$output_title; echo \"\$(date): Beginning test 6:Dynamic OutVCPU testing\" >> \"\$output_file\";nohup sudo ./a.out -p 100 -s 1000 -v -i 20 -d 2 >> \"\$output_file\" 2>&1 &" &
+ssh -T ubuntu@e-vm1 "output_file=$output_title; echo \"\$(date): Beginning test 6:Dynamic InVCPU testing\" >> \"\$output_file\";nohup sudo ./a.out -p 100 -s 2000 -v -i 20 -d 2 >> \"\$output_file\" 2>&1 &"
 
 
 
