@@ -372,9 +372,9 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       
       get_cpu_information(num_threads,data_end,thread_arg);
       //get actual profiling period
-      double test = (profile_time 
-        + static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())
-        - static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(endtime.time_since_epoch()).count()));
+      double test = (profile_time * 1000000
+        + static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())
+        - static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()));
       getFinalizedData(num_threads,test,data_begin,data_end,result_arr,thread_arg);
        //If the next interval is heavy, move the threads to high priority.
       if ((profiler_iter+1) % heavy_profile_interval == 0){
