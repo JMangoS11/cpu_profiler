@@ -31,7 +31,7 @@ sleep 10
 
 
 ssh -T ubuntu@e-vm1  << EOF
-    echo "$(date): First Minute of Measurement Finished,One Third Competition Intialized  >> ${output_title}
+    echo "$(date): First Minute of Measurement Finished,One Third Competition Intialized"  >> ${output_title}
 EOF
 
 ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 150 -s 450 -i 1 &" &
