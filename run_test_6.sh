@@ -19,7 +19,7 @@ done
 
 
 # Start the prober
-output_title="/cpu_profiler/test_logs/6prober_output_$(date +%d%H%M).txt"
+output_title="6prober_output_$(date +%d%H%M).txt"
 # Start the prober
 ssh -T ubuntu@e-vm1 "output_file=$output_title; echo \"\$(date): Beginning test 6:Dynamic InVCPU testing\" >> \"\$output_file\";nohup sudo ./a.out -p 50 -s 2000 -v -i 20 -d 1 >> \"\$output_file\" 2>&1 &"
 
