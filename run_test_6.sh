@@ -65,7 +65,7 @@ EOF
 
 
 ssh -T ubuntu@e-vm1 "sudo killall work.out" &
-ssh -T ubuntu@e-vm2 'nohup sysbench --threads=16 --time=900000 cpu run &' &
+ssh -T ubuntu@e-vm1 'nohup sysbench --threads=16 --time=900000 cpu run &' &
 
 
 sleep 60
