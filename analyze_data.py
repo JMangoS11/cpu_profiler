@@ -2,7 +2,7 @@ import pandas as pd
 from collections import defaultdict
 
 # Open and read the file
-with open('6prober_output_071148.txt', 'r') as f:
+with open('6prober_output_071732.txt', 'r') as f:
     lines = f.readlines()
 
 # Initialize a dictionary to store the parsed data
@@ -15,14 +15,17 @@ for line in lines:
     if line.startswith('CPU:'):
         current_cpu = line.split(" ")[0].split(":")[1]
     # Ignore lines starting with 'Fri' or '---', or too short lines
-    elif line.startswith('Fri') or len(line)<3 or line.startswith('---'):
+    elif line.startswith('Fri') or len(line)<3 or line.startswith('---')or line.startswith('  '):
         print('start')
     # For other lines, parse values and add to the dictionary
     else:
         # remove any leading colon from line
         if(line[0]==":"):
             line = line[1:]
+        print(line)
         values = line.split(':') 
+        if(len(values)<2):
+            break
         for i in range(0, len(values), 2):
             # Get the label (e.g., 'Capacity Perc') and the value
             label, value = values[i], float(values[i+1])
