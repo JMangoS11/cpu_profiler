@@ -33,7 +33,7 @@ ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): First Minute of Measurement Finished,One Third Competition Intialized"  >> ${output_title}
 EOF
 
-ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 25 -s 50 -i 10000000 &" &
+ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 30 -s 60 -i 10000000 &" &
 
 sleep 60
 ssh -T ubuntu@e-vm1  << EOF
@@ -41,7 +41,7 @@ ssh -T ubuntu@e-vm1  << EOF
 EOF
 
 ssh -T ubuntu@e-vm3 "sudo killall a.out"
-ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 35 -s 35 -i 1000000 &" &
+ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 45 -s 45 -i 1000000 &" &
 sleep 60
 
 ssh -T ubuntu@e-vm1  << EOF
@@ -49,6 +49,6 @@ ssh -T ubuntu@e-vm1  << EOF
 EOF
 
 ssh -T ubuntu@e-vm3 "sudo killall a.out"
-ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 50 -s 25 -i 100000000000 &" &
+ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 60 -s 30 -i 100000000000 &" &
 
 sleep 60
