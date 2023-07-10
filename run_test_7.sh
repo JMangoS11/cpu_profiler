@@ -49,6 +49,6 @@ ssh -T ubuntu@e-vm1  << EOF
 EOF
 
 ssh -T ubuntu@e-vm3 "sudo killall a.out"
-ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 60 -s 30 -i 100000000000 &" &
+ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 60 -s 30 -i 1000000 &" &
 
 sleep 60
