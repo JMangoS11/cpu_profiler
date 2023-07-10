@@ -22,7 +22,7 @@ done
 output_title="7prober_output_$(date +%d%H%M).txt"
 # Start the prober
 ssh -T ubuntu@e-vm1 "output_file=$output_title; echo \"\$(date): Starting prober\" >> \"\$output_file\";nohup sudo ./a.out -p 100 -d 3 -s 1000 -v -i 20 >> \"\$output_file\" 2>&1 &"
-
+ssh -T ubuntu@e-vm1 'nohup sysbench --threads=16 --time=900000 cpu run &' &
 
 
 # Wait a minute to let the prober measure
@@ -52,3 +52,12 @@ ssh -T ubuntu@e-vm3 "sudo killall a.out"
 ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 60 -s 30 -i 1000000 &" &
 
 sleep 60
+
+ssh -T ubuntu@e-vm1  << EOF
+    echo "$(date): Fourth  Minute of Measurement Finished, Two Thirds Competition Initialized" >> ${output_title}
+EOF
+
+ssh -T ubuntu@e-vm3 'nohup sysbench --threads=16 --time=900000 cpu run &' &
+sleep 60
+ssh -T ubuntu@e-vm3 "sudo killall a.out"
+ssh -T ubuntu@e-vm1 "sudo killall a.out"
