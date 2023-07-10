@@ -11,8 +11,7 @@ done
 
 for i in {0..15}
 do
-    pinned_core=$(( i%4 ))
-    virsh vcpupin e-vm3 $i $pinned_core
+    virsh vcpupin e-vm3 $i $i
 done
 
 
@@ -27,14 +26,14 @@ ssh -T ubuntu@e-vm1 "output_file=$output_title; echo \"\$(date): Starting prober
 
 
 # Wait a minute to let the prober measure
-sleep 10
+sleep 60
 
 
 ssh -T ubuntu@e-vm1  << EOF
     echo "$(date): First Minute of Measurement Finished,One Third Competition Intialized"  >> ${output_title}
 EOF
 
-ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 150 -s 450 -i 1 &" &
+ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 25 -s 50 -i 1 &" &
 
 sleep 60
 ssh -T ubuntu@e-vm1  << EOF
@@ -42,7 +41,7 @@ ssh -T ubuntu@e-vm1  << EOF
 EOF
 
 ssh -T ubuntu@e-vm3 "sudo killall a.out"
-ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 250 -s 250 -i 1 &" &
+ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 35 -s 35 -i 1 &" &
 sleep 60
 
 ssh -T ubuntu@e-vm1  << EOF
@@ -50,6 +49,6 @@ ssh -T ubuntu@e-vm1  << EOF
 EOF
 
 ssh -T ubuntu@e-vm3 "sudo killall a.out"
-ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 450 -s 150 -i 1 &" &
+ssh -T ubuntu@e-vm3 "nohup sudo ./a.out -p 50 -s 25 -i 1 &" &
 
 sleep 60
