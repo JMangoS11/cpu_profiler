@@ -269,7 +269,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
-      result_arr[i].capacity_perc = ((profile_time*1000000)-stolen_pass)/(profile_time*1000000);
+      result_arr[i].capacity_perc = ((profile_time)-stolen_pass)/(profile_time);
       result_arr[i].preempts = preempts;
       if(result_arr[i].capacity_perc < 0.05){
         std::cout<<"Capacity Perc way below expected"<<profile_time<<"stolen"<<stolen_pass<<std::endl;
