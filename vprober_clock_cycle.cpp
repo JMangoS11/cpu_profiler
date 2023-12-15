@@ -323,7 +323,7 @@ void give_to_kernel(int cpunum,std::vector<profiled_data>& result_arr){
 	capacity_res = capacity_res + std::__cxx11::to_string((int)round(result_arr[i].capacity_perc_ema * result_arr[i].capacity_adj/1000)) + ";";
   }
   std::cout<<capacity_res;
-//  write_file << capacity_res;
+  write_file << capacity_res;
   write_file.close();
 }
 
