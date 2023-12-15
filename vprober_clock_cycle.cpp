@@ -292,6 +292,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       addToHistory(result_arr[i].preempts_hist,result_arr[i].preempts);
       result_arr[i].latency_ema = calculate_ema(decay_length,result_arr[i].latency_ema_a,result_arr[i].latency_ema,result_arr[i].latency);
       result_arr[i].capacity_perc_ema = calculate_ema(decay_length,result_arr[i].capacity_perc_ema_a,result_arr[i].capacity_perc_ema,result_arr[i].capacity_perc);
+      
       result_arr[i].latency_ema = calculateStdDev(result_arr[i].latency_hist);
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
     };
@@ -311,6 +312,19 @@ void printResult(int cpunum,std::vector<profiled_data>& result,std::vector<threa
         
   }
   std::cout<<"--------------"<<std::endl;
+}
+
+
+void give_to_kernel(int cpunum,std::vector<profiled_data>& result_arr){
+  std::fstream write_file;
+  std::string capacity_res;
+  write_file.open("/proc/edit_capacity", std::ios::out);
+  for (int i = 0; i < cpunum; i++){
+	capacity_res = capacity_res + std::__cxx11::to_string((int)round(result_arr[i].capacity_perc_ema * result_arr[i].capacity_adj/1000)) + ";";
+  }
+  std::cout<<capacity_res;
+//  write_file << capacity_res;
+  write_file.close();
 }
 
 void waitforWorkers(){
@@ -376,6 +390,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
         + static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count())
         - static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(endtime.time_since_epoch()).count()));
       getFinalizedData(num_threads,test,data_begin,data_end,result_arr,thread_arg);
+      give_to_kernel(num_threads,result_arr);
        //If the next interval is heavy, move the threads to high priority.
       if ((profiler_iter+1) % heavy_profile_interval == 0){
         for (int i = 0; i < num_threads; i++) {
@@ -389,6 +404,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
       }
     }
 }
+
 
 std::vector<thread_args*> setup_threads(std::vector<pthread_t>& thread_array,std::vector<raw_data>& data_end){
   cpu_set_t cpuset;

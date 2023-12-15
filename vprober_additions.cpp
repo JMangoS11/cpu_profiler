@@ -278,13 +278,13 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
         double perf_use = thread_arg[i]->user_time;
         result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute;
         if(result_arr[i].capacity_adj>5000000){
-          std::cout<<"Ok, let's do this again. Perf Use : "<<perf_use<<" raw compute:"<<data_end[i].raw_compute<<" capacity perc"<<1/result_arr[i].capacity_perc;
+//          std::cout<<"Ok, let's do this again. Perf Use : "<<perf_use<<" raw compute:"<<data_end[i].raw_compute<<" capacity perc"<<1/result_arr[i].capacity_perc;
         }
         
       }
       if(preempts == 0){
         if(stolen_pass != 0){
-          std::cout<< "incompatible steal/preempt"<<std::endl;
+  //        std::cout<< "incompatible steal/preempt"<<std::endl;
           return;
         }
         result_arr[i].latency = 0;
@@ -326,6 +326,18 @@ void waitforWorkers(){
   }
   pthread_mutex_unlock(&ready_check);
   ready_counter = 0;
+}
+
+void give_to_kernel(int cpunum,std::vector<profiled_data>& result_arr){
+  std::fstream write_file;
+  std::string capacity_res;
+  write_file.open("/proc/edit_capacity", std::ios::out);
+  for (int i = 0; i < cpunum; i++){
+        capacity_res = capacity_res + std::__cxx11::to_string((int)round(result_arr[i].capacity_perc * result_arr[i].capacity_adj/10000)) + ";";
+  }
+  std::cout<<capacity_res;
+  write_file << capacity_res;
+  write_file.close();
 }
 
 void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread_arg){
@@ -388,7 +400,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
           moveThreadtoHighPrio(thread_arg[i]->tid);
         }
       }
-      
+      give_to_kernel(num_threads,result_arr);
       profiler_iter++;
       if(verbose){
         printResult(num_threads,result_arr,thread_arg);
