@@ -264,6 +264,7 @@ void process_values(std::vector<profiled_data>& data) {
 
 
 void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr,std::vector<thread_args*> thread_arg){
+  int largest_capacity_adj = 0;
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
@@ -275,7 +276,9 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       if (profiler_iter % heavy_profile_interval == 0){
         double perf_use = thread_arg[i]->user_time;
         result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute;
-
+        if(result_arr[i].capacity_adj > largest_capacity_adj){
+          largest_capacity_adj = result_arr[i].capacity_adj;
+        }
      	
       }
       if(preempts == 0){
@@ -294,6 +297,10 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       result_arr[i].latency_ema = calculateStdDev(result_arr[i].latency_hist);
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
     };
+    for (int i = 0; i < numthreads; i++) {
+      result_arr[i].capacity_adj = result_arr[i].capacity_adj/largest_capacity_adj * 1024;
+    };
+    
     if (profiler_iter % heavy_profile_interval == 0){
         //process_values(result_arr);
       }
@@ -318,7 +325,7 @@ void give_to_kernel(int cpunum,std::vector<profiled_data>& result_arr){
   std::string capacity_res;
   write_file.open("/proc/edit_capacity", std::ios::out);
   for (int i = 0; i < cpunum; i++){
-	capacity_res = capacity_res + std::__cxx11::to_string((int)round(result_arr[i].capacity_perc *1024)) + ";";
+	capacity_res = capacity_res + std::__cxx11::to_string((int)round(result_arr[i].capacity_perc * result_arr[i].capacity_adj)) + ";";
   }
   std::cout<<capacity_res;
   write_file << capacity_res;
