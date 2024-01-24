@@ -298,7 +298,9 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       result_arr[i].capacity_perc_stddev = calculateStdDev(result_arr[i].capacity_perc_hist);
     };
     for (int i = 0; i < numthreads; i++) {
+      if(largest_capacity_adj != 0){
       result_arr[i].capacity_adj = result_arr[i].capacity_adj/largest_capacity_adj * 1024;
+      }
     };
     
     if (profiler_iter % heavy_profile_interval == 0){
