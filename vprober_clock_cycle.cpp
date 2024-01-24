@@ -264,7 +264,7 @@ void process_values(std::vector<profiled_data>& data) {
 
 
 void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& data_begin,std::vector<raw_data>& data_end,std::vector<profiled_data>& result_arr,std::vector<thread_args*> thread_arg){
-  int largest_capacity_adj = 0;
+  double largest_capacity_adj = 0;
   for (int i = 0; i < numthreads; i++) {
       u64 stolen_pass = data_end[i].steal_time - data_begin[i].steal_time;
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
