@@ -21,7 +21,7 @@ typedef uint64_t u64;
 
 
 //initialize global variables
-int num_threads = 4;
+int num_threads = 16;
 int sleep_length = 1000;
 int profile_time = 100;
 int decay_length = 5;
@@ -29,7 +29,7 @@ int decay_length = 5;
 int profiler_iter = -1;
 
 //this decides how many regular profile intervals go by before a "heavy" profile happens, where we try to get the actual capacity of the core
-int heavy_profile_interval = 5;
+int heavy_profile_interval = 30;
 int context_window = 5;
 double milliseconds_totick_factor = static_cast<double>(sysconf(_SC_CLK_TCK))/1000.0;
 bool verbose = false;
@@ -225,7 +225,6 @@ void addToHistory(std::deque<double>& history_list,double item){
 
 void setArguments(const std::vector<std::string_view>& arguments) {
     verbose = has_option(arguments, "-v");
-    
     auto set_option_value = [&](const std::string_view& option, int& target) {
         if (auto value = get_option(arguments, option); !value.empty()) {
             try {
@@ -237,7 +236,6 @@ void setArguments(const std::vector<std::string_view>& arguments) {
             }
         }
     };
-    
     set_option_value("-s", sleep_length);
     set_option_value("-p", profile_time);
     set_option_value("-d", decay_length);
@@ -278,7 +276,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
         double perf_use = thread_arg[i]->user_time;
         result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute;
 
-        
+     	
       }
       if(preempts == 0){
         result_arr[i].latency = 0;
@@ -320,7 +318,7 @@ void give_to_kernel(int cpunum,std::vector<profiled_data>& result_arr){
   std::string capacity_res;
   write_file.open("/proc/edit_capacity", std::ios::out);
   for (int i = 0; i < cpunum; i++){
-	capacity_res = capacity_res + std::__cxx11::to_string((int)round(result_arr[i].capacity_perc_ema * result_arr[i].capacity_adj/1000)) + ";";
+	capacity_res = capacity_res + std::__cxx11::to_string((int)round(result_arr[i].capacity_perc *1024)) + ";";
   }
   std::cout<<capacity_res;
   write_file << capacity_res;
@@ -342,7 +340,6 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
     std::vector<profiled_data> result_arr(num_threads);
 
     while(true){
-
       //If the last interval was heavy, move the threads to low priority. If interval is less then 2, obviously special workload. 
       if ((!heavy_profile_interval < 2) && ((profiler_iter-1) % heavy_profile_interval == 0)){
         for (int i = 0; i < num_threads; i++) {
@@ -446,9 +443,9 @@ std::vector<thread_args*> setup_threads(std::vector<pthread_t>& thread_array,std
 
 
 int main(int argc, char *argv[]) {
+  printf("Process Finished");
   //the threads need to be moved to root level cgroup before they can be distributed to high/low cgroup
   moveCurrentThread();
-  
   //Setting up arguments
   const std::vector<std::string_view> args(argv, argv + argc);
   setArguments(args);
