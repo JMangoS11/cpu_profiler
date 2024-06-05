@@ -19,15 +19,13 @@
 using namespace std::chrono;
 typedef uint64_t u64;
 
-
 //initialize global variables
-int num_threads = 16;
+int num_threads = sysconf(_SC_NPROCESSORS_ONLN);
 int sleep_length = 1000;
 int profile_time = 100;
-int decay_length = 5;
+int decay_length = 1;
 //this is for saving how many profiling periods have gone by, so far. Offset by 1 because we want capacity measurement to start on next cycle
 int profiler_iter = -1;
-
 //this decides how many regular profile intervals go by before a "heavy" profile happens, where we try to get the actual capacity of the core
 int heavy_profile_interval = 30;
 int context_window = 5;
@@ -40,7 +38,9 @@ void* run_computation(void * arg);
 pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 pthread_cond_t cv1 = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t ready_check = PTHREAD_MUTEX_INITIALIZER;
+std::vector<int> vtop_banned;
 int ready_counter = 0;
+int banned_amount =0;
 //Arguments for each thread
 struct thread_args {
   int id;
@@ -51,6 +51,18 @@ struct thread_args {
 };
 
 
+int stick_this_thread_to_core(int core_id) {
+   int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+   if (core_id < 0 || core_id >= num_cores)
+      return EINVAL;
+
+   cpu_set_t cpuset;
+   CPU_ZERO(&cpuset);
+   CPU_SET(core_id, &cpuset);
+
+   pthread_t current_thread = pthread_self();    
+   return pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+}
 
 struct raw_data {
   u64 steal_time;
@@ -270,9 +282,6 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
       u64 preempts = data_end[i].preempts - data_begin[i].preempts;
       result_arr[i].capacity_perc = ((profile_time)-stolen_pass)/(profile_time);
       result_arr[i].preempts = preempts;
-      if(result_arr[i].capacity_perc < 0.05){
-        std::cout<<"Capacity Perc way below expected"<<profile_time<<"stolen"<<stolen_pass<<std::endl;
-      }
       if (profiler_iter % heavy_profile_interval == 0){
         double perf_use = thread_arg[i]->user_time;
         result_arr[i].capacity_adj = (1/perf_use) * data_end[i].raw_compute;
@@ -318,6 +327,13 @@ void printResult(int cpunum,std::vector<profiled_data>& result,std::vector<threa
         std::cout <<":Cperc ema: "<<result[i].capacity_perc_ema <<std::endl<<std::endl;
         
   }
+  auto now = std::chrono::system_clock::now();
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+    auto timer = std::chrono::system_clock::to_time_t(now);
+
+    std::tm bt = *std::localtime(&timer);
+  
+    std::cout << "hardtimestamp: " << (bt.tm_min*60000 + bt.tm_sec*1000 + ms.count()) << std::endl;
   std::cout<<"--------------"<<std::endl;
 }
 
@@ -327,20 +343,97 @@ void give_to_kernel(int cpunum,std::vector<profiled_data>& result_arr){
   std::string capacity_res;
   write_file.open("/proc/edit_capacity", std::ios::out);
   for (int i = 0; i < cpunum; i++){
-	capacity_res = capacity_res + std::__cxx11::to_string((int)round(result_arr[i].capacity_perc * result_arr[i].capacity_adj)) + ";";
+	capacity_res = capacity_res + std::__cxx11::to_string((int)round(result_arr[i].capacity_perc_ema * 1024)) + ";";
+//	capacity_res = capacity_res + std::__cxx11::to_string(result_arr[i].latency) + ";";
   }
-  std::cout<<capacity_res;
   write_file << capacity_res;
+  write_file.close();
+
+  std::string latency_res;
+  write_file.open("/proc/edit_latency", std::ios::out);
+  for (int i = 0; i < cpunum; i++){
+	latency_res = latency_res + std::__cxx11::to_string((int)round(result_arr[i].latency)) + ";";
+//      capacity_res = capacity_res + std::__cxx11::to_string(result_arr[i].latency) + ";";
+  }
+  write_file <<latency_res;
   write_file.close();
 }
 
+
+
+
 void waitforWorkers(){
   pthread_mutex_lock(&ready_check);
-  while(ready_counter != num_threads){
+  while(ready_counter != (num_threads-banned_amount)){
     pthread_cond_wait(&cv1, &ready_check);
   }
   pthread_mutex_unlock(&ready_check);
   ready_counter = 0;
+}
+
+void banVcpus(std::vector<profiled_data>& data_arr){
+	std::ifstream file("/sys/fs/cgroup/user.slice/cpuset.cpus");
+	if (!file) {
+        	std::cerr << "Failed to access file" << std::endl;
+        	return;
+    	}
+	std::string bans="";
+	for(int i = 0; i<num_threads; i++){
+		if(vtop_banned[i] != 1 &&  (data_arr[i].capacity_perc_ema > 0.2)){
+		 	bans+=std::to_string(i)+",";
+		}
+	}
+     if (!bans.empty()) {
+        bans.pop_back();
+    }
+
+    // Write the banned vCPUs to the file
+    std::ofstream outfile("/sys/fs/cgroup/user.slice/cpuset.cpus");
+    if (!outfile) {
+        std::cerr << "Failed to open file for writing" << std::endl;
+        return;
+    }
+
+    outfile << bans;
+    outfile.close();
+
+    file.close();
+}
+
+void updateVectorFromBanlist(std::string fileLocation) {
+    std::ifstream file(fileLocation);
+
+    if (!file) {
+        std::cerr << "Failed to access file" << std::endl;
+        return;
+    }
+
+    // Set all elements of vtop_banned to 0
+    std::fill(vtop_banned.begin(), vtop_banned.end(), 0);
+    banned_amount = 0;
+    std::string line;
+    while (std::getline(file, line)) {
+        std::istringstream iss(line);
+        std::string item;
+        while (std::getline(iss, item, ',')) {
+            // Remove leading/trailing whitespace from the item
+            item.erase(0, item.find_first_not_of(" \t"));
+            item.erase(item.find_last_not_of(" \t") + 1);
+
+            // Convert the item to an integer and update the vector
+            try {
+                int index = std::stoi(item);
+                if (index >= 0 && index < vtop_banned.size()) {
+                    	std::cout<<"vtop_banend"<<index<<std::endl;
+			vtop_banned[index] = 1;
+                }
+            } catch (const std::invalid_argument& e) {
+                // Skip invalid integers
+                continue;
+            }
+        }
+    }
+    file.close();
 }
 
 void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread_arg){
@@ -355,7 +448,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
           moveThreadtoLowPrio(thread_arg[i]->tid);
         }
       }
-      
+      updateVectorFromBanlist("/home/ubuntu/banlist/vtop.txt");
       //sleep during sleep
       std::this_thread::sleep_for(std::chrono::milliseconds(sleep_length));
 
@@ -403,7 +496,7 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
           moveThreadtoHighPrio(thread_arg[i]->tid);
         }
       }
-      
+      banVcpus(result_arr);
       profiler_iter++;
       if(verbose){
         printResult(num_threads,result_arr,thread_arg);
@@ -420,7 +513,7 @@ std::vector<thread_args*> setup_threads(std::vector<pthread_t>& thread_array,std
     struct thread_args *args = new struct thread_args;
     //init mutex
     //TODO:use pthread_mutex_init
-    //decide which cores to bind cpus too
+    //decide which cores to bind cpus to
     CPU_ZERO(&cpuset);
     CPU_SET(i, &cpuset);
     //give an id and assign mutex to all threads
@@ -452,7 +545,8 @@ std::vector<thread_args*> setup_threads(std::vector<pthread_t>& thread_array,std
 
 
 int main(int argc, char *argv[]) {
-  printf("Process Finished");
+  int num_cpus = sysconf(_SC_NPROCESSORS_ONLN); // Get the number of online processors
+   vtop_banned.resize(num_cpus, 0); 
   //the threads need to be moved to root level cgroup before they can be distributed to high/low cgroup
   moveCurrentThread();
   //Setting up arguments
@@ -510,6 +604,10 @@ void alertMainThread(){
   pthread_cond_signal(&cv1);
 }
 
+
+
+
+
 void* run_computation(void * arg)
 {
     //TODO-Learn how to use kernel shark to visualize whole process
@@ -517,16 +615,15 @@ void* run_computation(void * arg)
     moveThreadtoLowPrio(syscall(SYS_gettid));
     args->tid = syscall(SYS_gettid);
     while(true) {
+      stick_this_thread_to_core(args->id);
       struct timespec start,end,lstart,lend;
       //here to avoid a race condition
       bool heavy_interval = false;
-
       pthread_mutex_lock(&args->mutex);
       while (! initialized) {
         pthread_cond_wait(&cv, &args->mutex);
       }
       pthread_mutex_unlock(&args->mutex);
-      
       int addition_calculator = 0;
       if (profiler_iter % heavy_profile_interval == 0){
         alertMainThread();
@@ -536,10 +633,13 @@ void* run_computation(void * arg)
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
         heavy_interval = true;
       }
-      
+     if(vtop_banned[args->id]==0){
       while(((std::chrono::high_resolution_clock::now() < endtime))) {
         addition_calculator += 1;
       };
+      }else{
+	std::this_thread::sleep_for(std::chrono::milliseconds(profile_time));
+	}
       *args->addition_calc = addition_calculator;
       if(heavy_interval){
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
