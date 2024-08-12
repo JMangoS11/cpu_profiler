@@ -144,7 +144,7 @@ bool has_option(
 
 
 
-void moveThreadtoLowPrio(pid_t tid) { //commenting all uses -testing-
+void moveThreadtoLowPrio(pid_t tid) {
 
     std::string path = "/sys/fs/cgroup/lw_prgroup/cgroup.threads";
     std::ofstream ofs(path, std::ios_base::app);
@@ -447,7 +447,6 @@ void do_profile(std::vector<raw_data>& data_end,std::vector<thread_args*> thread
         for (int i = 0; i < num_threads; i++) {
           moveThreadtoLowPrio(thread_arg[i]->tid);
         }
-	//profiler_iter++; //Testing
       }
       //updateVectorFromBanlist("/home/jmangos/banlist/vtop.txt");
       //sleep during sleep
