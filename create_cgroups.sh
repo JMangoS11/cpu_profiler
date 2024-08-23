@@ -1,5 +1,5 @@
 if ! grep -q "cpu" /sys/fs/cgroup/cgroup.subtree_control; then 
-    sudo echo "+cpu+cpuset" >> /sys/fs/cgroup/cgroup.subtree_control; 
+    sudo echo "+cpu +cpuset" >> /sys/fs/cgroup/cgroup.subtree_control; 
 fi
 sudo echo "+cpuset">> /sys/fs/cgroup/cgroup.subtree_control;
 
