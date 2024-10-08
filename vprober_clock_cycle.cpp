@@ -99,6 +99,8 @@ struct profiled_data{
   double capacity_adj;
   double latency;
   double max_latency;
+
+  double capacity_raw;
 };
 
 
@@ -308,6 +310,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
     };
     for (int i = 0; i < numthreads; i++) {
       if(largest_capacity_adj != 0){
+      results_arr[i].capacity_raw = result_arr[i].capacity_adj;
       result_arr[i].capacity_adj = result_arr[i].capacity_adj/largest_capacity_adj * 1024;
       }
     };
@@ -322,7 +325,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
 void printResult(int cpunum,std::vector<profiled_data>& result,std::vector<thread_args*> thread_arg){
   for (int i = 0; i < cpunum; i++){
         std::cout <<"CPU:"<<i<<" TID:"<<thread_arg[i]->tid<<std::endl;
-        std::cout<<"Capacity Perc:"<<result[i].capacity_perc<<":Latency:"<<result[i].latency<<":Preempts:"<<result[i].preempts<<":Capacity Raw:"<<result[i].capacity_adj<<std::endl;
+        std::cout<<"Capacity Perc:"<<result[i].capacity_perc<<":Latency:"<<result[i].latency<<":Preempts:"<<result[i].preempts<<":Capacity Raw:"<<result[i].capacity_adj<<":Not-Normalized Raw:"<<result[i].capacity_raw<<std::endl;
         std::cout<<":Cperc stddev:"<<result[i].capacity_perc_stddev<<":Max latency:"<<result[i].max_latency;
         std::cout <<":Cperc ema: "<<result[i].capacity_perc_ema <<std::endl<<std::endl;
         
