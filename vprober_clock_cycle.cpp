@@ -310,7 +310,7 @@ void getFinalizedData(int numthreads,double profile_time,std::vector<raw_data>& 
     };
     for (int i = 0; i < numthreads; i++) {
       if(largest_capacity_adj != 0){
-      results_arr[i].capacity_raw = result_arr[i].capacity_adj;
+      result_arr[i].capacity_raw = result_arr[i].capacity_adj;
       result_arr[i].capacity_adj = result_arr[i].capacity_adj/largest_capacity_adj * 1024;
       }
     };
